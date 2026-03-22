@@ -1,0 +1,11 @@
+name: petri-clash
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy
+  - pillow
+  - pytorch
+  - pip
+  - pip:
+      - pygame
