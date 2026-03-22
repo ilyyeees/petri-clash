@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import random
 from pathlib import Path
@@ -16,34 +17,143 @@ def list_targets():
     return sorted(Path("targets").glob("*.png"))
 
 
-def load_model_blob(blob, device):
+def normalize_state_dict(state_dict):
+    if not state_dict:
+        return state_dict
+
+    first_key = next(iter(state_dict))
+    if not first_key.startswith("_orig_mod."):
+        return state_dict
+
+    # compiled checkpoints like to smuggle this prefix in, so strip it back out
+    return {key.removeprefix("_orig_mod."): value for key, value in state_dict.items()}
+
+
+def seed_number(seed_dir):
+    name = seed_dir.name
+    if not name.startswith("seed_"):
+        return 10**9
+    try:
+        return int(name.split("_", 1)[1])
+    except ValueError:
+        return 10**9
+
+
+def seed_score(seed_dir):
+    summary_path = seed_dir / "best_summary.json"
+    if not summary_path.exists():
+        return float("inf")
+
+    try:
+        blob = json.loads(summary_path.read_text())
+        return float(blob["score"])
+    except Exception:
+        return float("inf")
+
+
+def maybe_channels_last(tensor, enabled, device):
+    if enabled and device == "cuda":
+        return tensor.contiguous(memory_format=torch.channels_last)
+    return tensor
+
+
+def discover_v2_checkpoint(target_path, preferred_seed=None):
+    target_dir = Path("weights") / target_path.stem
+    if not target_dir.is_dir():
+        return None
+
+    if preferred_seed is not None:
+        seed_dir = target_dir / f"seed_{preferred_seed:03d}"
+        checkpoint_path = seed_dir / "checkpoints" / "best.pt"
+        if checkpoint_path.exists():
+            return checkpoint_path
+
+    candidates = []
+    for seed_dir in sorted(target_dir.glob("seed_*")):
+        checkpoint_path = seed_dir / "checkpoints" / "best.pt"
+        if not checkpoint_path.exists():
+            continue
+        candidates.append((seed_score(seed_dir), seed_number(seed_dir), checkpoint_path))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda row: (row[0], row[1]))
+    return candidates[0][2]
+
+
+def load_v2_model(checkpoint_path, device):
+    blob = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    config = blob.get("config")
+
+    if config is None:
+        resolved_path = checkpoint_path.parents[1] / "resolved_config.json"
+        if resolved_path.exists():
+            config = json.loads(resolved_path.read_text())
+
+    if config is None:
+        raise SystemExit(f"missing config for {checkpoint_path}")
+
+    model_cfg = config["model"]
+    channels_last = bool(config.get("train", {}).get("channels_last", False))
     model = NCA(
-        channels=blob.get("channels", 16),
-        hidden_size=blob.get("hidden_size", 128),
-        fire_rate=blob.get("fire_rate", 0.5),
+        channels=int(model_cfg["channels"]),
+        hidden_size=int(model_cfg["hidden_size"]),
+        fire_rate=float(model_cfg["fire_rate"]),
     ).to(device)
-    model.load_state_dict(blob["state_dict"])
+
+    if channels_last and device == "cuda":
+        model = model.to(memory_format=torch.channels_last)
+
+    model.load_state_dict(normalize_state_dict(blob["model"]))
     model.eval()
-    return model
+
+    return {
+        "model": model,
+        "channels": int(model_cfg["channels"]),
+        "grid_size": int(config["data"]["grid_size"]),
+        "channels_last": channels_last,
+        "kind": "v2",
+        "source": str(checkpoint_path),
+        "seed_dir": checkpoint_path.parents[1].name,
+        "score": float(blob.get("score", seed_score(checkpoint_path.parents[1]))),
+    }
 
 
-def load_model(weight_path, device):
-    blob = torch.load(weight_path, map_location=device)
-    return load_model_blob(blob, device)
+def load_v1_model(weight_path, device):
+    blob = torch.load(weight_path, map_location=device, weights_only=False)
+    model = NCA(
+        channels=int(blob.get("channels", 16)),
+        hidden_size=int(blob.get("hidden_size", 128)),
+        fire_rate=float(blob.get("fire_rate", 0.5)),
+    ).to(device)
+    model.load_state_dict(normalize_state_dict(blob["state_dict"]))
+    model.eval()
+
+    return {
+        "model": model,
+        "channels": int(blob.get("channels", 16)),
+        "grid_size": int(blob.get("grid_size", 48) or 48),
+        "channels_last": False,
+        "kind": "v1",
+        "source": str(weight_path),
+        "train_steps": int(blob.get("train_steps", 0) or 0),
+    }
 
 
-def ensure_model(target_path, device, bootstrap_steps):
+def ensure_model(target_path, device, bootstrap_steps, preferred_seed=None):
+    v2_checkpoint = discover_v2_checkpoint(target_path, preferred_seed=preferred_seed)
+    if v2_checkpoint is not None:
+        bundle = load_v2_model(v2_checkpoint, device)
+        score_text = f" score {bundle['score']:.5f}" if bundle["score"] < float("inf") else ""
+        print(f"loaded {target_path.stem} from {bundle['source']} ({bundle['seed_dir']}{score_text})")
+        return bundle
+
     weight_path = Path("weights") / f"{target_path.stem}.pt"
     if weight_path.exists():
-        blob = torch.load(weight_path, map_location="cpu")
-        trained_steps = int(blob.get("train_steps", 0) or 0)
-        if trained_steps >= bootstrap_steps or bootstrap_steps <= 0:
-            print(f"loaded {weight_path.name} ({trained_steps} steps)")
-            return load_model_blob(blob, device)
-        print(
-            f"refreshing {weight_path.name} because it only has "
-            f"{trained_steps} steps"
-        )
+        bundle = load_v1_model(weight_path, device)
+        print(f"loaded {target_path.stem} from {weight_path.name} ({bundle['train_steps']} steps)")
+        return bundle
 
     if bootstrap_steps > 0:
         print(f"bootstrapping {target_path.name} for {bootstrap_steps} steps")
@@ -58,16 +168,31 @@ def ensure_model(target_path, device, bootstrap_steps):
             save_every=bootstrap_steps,
             device=device,
         )
-        return load_model(weight_path, device)
+        bundle = load_v1_model(weight_path, device)
+        print(f"loaded {target_path.stem} from {weight_path.name} ({bundle['train_steps']} steps)")
+        return bundle
 
-    print(f"missing {weight_path.name}, using an untrained rule")
+    print(f"missing weights for {target_path.stem}, using an untrained rule")
     model = NCA().to(device)
     model.eval()
-    return model
+    return {
+        "model": model,
+        "channels": 16,
+        "grid_size": 48,
+        "channels_last": False,
+        "kind": "scratch",
+        "source": "untrained",
+    }
 
 
 def clamp(value, low, high):
     return max(low, min(high, value))
+
+
+def active_grid_size(requested_size, left_bundle, right_bundle):
+    if requested_size > 0:
+        return requested_size
+    return max(int(left_bundle["grid_size"]), int(right_bundle["grid_size"]))
 
 
 def random_seed_positions(size):
@@ -82,15 +207,30 @@ def random_seed_positions(size):
     return ax, y, bx, y
 
 
-def reset_world(size, device):
+def reset_world(size, device, left_bundle, right_bundle):
     ax, ay, bx, by = random_seed_positions(size)
-    state_a = torch.zeros(1, 16, size, size, device=device)
-    state_b = torch.zeros(1, 16, size, size, device=device)
+    state_a = make_seed(
+        1,
+        channels=left_bundle["channels"],
+        height=size,
+        width=size,
+        xs=[ax],
+        ys=[ay],
+        device=device,
+    )
+    state_b = make_seed(
+        1,
+        channels=right_bundle["channels"],
+        height=size,
+        width=size,
+        xs=[bx],
+        ys=[by],
+        device=device,
+    )
+    state_a = maybe_channels_last(state_a, left_bundle["channels_last"], device)
+    state_b = maybe_channels_last(state_b, right_bundle["channels_last"], device)
+
     owner = torch.zeros(1, 1, size, size, dtype=torch.long, device=device)
-
-    state_a = make_seed(1, height=size, width=size, xs=[ax], ys=[ay], device=device)
-    state_b = make_seed(1, height=size, width=size, xs=[bx], ys=[by], device=device)
-
     owner[0, 0, ay, ax] = 1
     owner[0, 0, by, bx] = 2
     return state_a, state_b, owner
@@ -121,7 +261,7 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
         near_a = F.max_pool2d(owned_a.float(), 3, stride=1, padding=1) > 0
         near_b = F.max_pool2d(owned_b.float(), 3, stride=1, padding=1) > 0
 
-        # each model keeps its own hidden state now, otherwise they poison each other
+        # each side keeps its own hidden soup now, otherwise they scramble each other
         claim_a = (alpha_a > 0.05) & (owned_a | near_a)
         claim_b = (alpha_b > 0.05) & (owned_b | near_b)
 
@@ -137,10 +277,18 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
         winner_owner = torch.where(a_wins, torch.ones_like(owner), torch.full_like(owner, 2))
         next_owner = torch.where(both, winner_owner, next_owner)
 
-        next_state_a = torch.where((next_owner == 1).expand_as(proposed_a), proposed_a, torch.zeros_like(proposed_a))
-        next_state_b = torch.where((next_owner == 2).expand_as(proposed_b), proposed_b, torch.zeros_like(proposed_b))
+        next_state_a = torch.where(
+            (next_owner == 1).expand_as(proposed_a),
+            proposed_a,
+            torch.zeros_like(proposed_a),
+        )
+        next_state_b = torch.where(
+            (next_owner == 2).expand_as(proposed_b),
+            proposed_b,
+            torch.zeros_like(proposed_b),
+        )
 
-        # tiny sparks are what turn into the ugly late-stage creep, so kill them early
+        # tiny sparks are what turn into the ugly drift, so cut them off before they matter
         support_a = F.avg_pool2d((next_owner == 1).float(), 3, stride=1, padding=1)
         support_b = F.avg_pool2d((next_owner == 2).float(), 3, stride=1, padding=1)
         stable_a = (next_owner == 1) & (support_a >= (2.0 / 9.0))
@@ -162,16 +310,19 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
     return next_state_a, next_state_b, next_owner
 
 
-def compose_state(state_a, state_b, owner):
+def compose_rgba(state_a, state_b, owner):
+    rgba_a = state_a[:, :4]
+    rgba_b = state_b[:, :4]
+    blank = torch.zeros_like(rgba_a)
     return torch.where(
-        (owner == 1).expand_as(state_a),
-        state_a,
-        torch.where((owner == 2).expand_as(state_b), state_b, torch.zeros_like(state_a)),
+        (owner == 1).expand_as(rgba_a),
+        rgba_a,
+        torch.where((owner == 2).expand_as(rgba_b), rgba_b, blank),
     )
 
 
 def render_surface(state_a, state_b, owner):
-    rgba = compose_state(state_a, state_b, owner)[0, :4].detach().cpu().clamp(0.0, 1.0)
+    rgba = compose_rgba(state_a, state_b, owner)[0].detach().cpu().clamp(0.0, 1.0)
     rgb = rgba[:3] * rgba[3:4]
     image = (rgb.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
     return pygame.surfarray.make_surface(image.swapaxes(0, 1))
@@ -184,12 +335,14 @@ def select_target(index, targets):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--grid-size", type=int, default=48)
+    parser.add_argument("--grid-size", type=int, default=0)
     parser.add_argument("--window-size", type=int, default=960)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--left", type=int, default=1)
     parser.add_argument("--right", type=int, default=2)
-    parser.add_argument("--bootstrap-steps", type=int, default=500)
+    parser.add_argument("--left-seed", type=int)
+    parser.add_argument("--right-seed", type=int)
+    parser.add_argument("--bootstrap-steps", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
     parser.add_argument("--headless-frames", type=int, default=0)
     args = parser.parse_args()
@@ -211,15 +364,18 @@ def main():
 
     left_index, left_target = select_target(args.left - 1, targets)
     right_index, right_target = select_target(args.right - 1, targets)
-    left_model = ensure_model(left_target, args.device, args.bootstrap_steps)
-    right_model = ensure_model(right_target, args.device, args.bootstrap_steps)
+    left_bundle = ensure_model(left_target, args.device, args.bootstrap_steps, preferred_seed=args.left_seed)
+    right_bundle = ensure_model(right_target, args.device, args.bootstrap_steps, preferred_seed=args.right_seed)
+    left_model = left_bundle["model"]
+    right_model = right_bundle["model"]
 
-    print(f"left  -> {left_target.stem}")
-    print(f"right -> {right_target.stem}")
+    print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
+    print(f"right -> {right_target.stem} [{right_bundle['kind']}]")
 
     paused = False
     frames = 0
-    state_a, state_b, owner = reset_world(args.grid_size, args.device)
+    grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
+    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
 
     digit_keys = {
         pygame.K_1: 0,
@@ -244,29 +400,43 @@ def main():
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
-                    state_a, state_b, owner = reset_world(args.grid_size, args.device)
+                    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
                 elif event.key in digit_keys and digit_keys[event.key] < len(targets):
                     target_id = digit_keys[event.key]
                     if event.mod & pygame.KMOD_SHIFT:
                         right_index, right_target = select_target(target_id, targets)
-                        right_model = ensure_model(right_target, args.device, args.bootstrap_steps)
-                        print(f"right -> {right_target.stem}")
+                        right_bundle = ensure_model(
+                            right_target,
+                            args.device,
+                            args.bootstrap_steps,
+                            preferred_seed=args.right_seed,
+                        )
+                        right_model = right_bundle["model"]
+                        print(f"right -> {right_target.stem} [{right_bundle['kind']}]")
                     else:
                         left_index, left_target = select_target(target_id, targets)
-                        left_model = ensure_model(left_target, args.device, args.bootstrap_steps)
-                        print(f"left  -> {left_target.stem}")
-                    state_a, state_b, owner = reset_world(args.grid_size, args.device)
+                        left_bundle = ensure_model(
+                            left_target,
+                            args.device,
+                            args.bootstrap_steps,
+                            preferred_seed=args.left_seed,
+                        )
+                        left_model = left_bundle["model"]
+                        print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
+
+                    grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
+                    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 width, height = window.get_size()
-                gx = int(event.pos[0] * args.grid_size / max(width, 1))
-                gy = int(event.pos[1] * args.grid_size / max(height, 1))
+                gx = int(event.pos[0] * grid_size / max(width, 1))
+                gy = int(event.pos[1] * grid_size / max(height, 1))
                 state_a, state_b, owner = crater(
                     state_a,
                     state_b,
                     owner,
                     gx,
                     gy,
-                    radius=max(2, args.grid_size // 12),
+                    radius=max(2, grid_size // 12),
                 )
 
         if not paused:
