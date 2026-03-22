@@ -1,0 +1,4 @@
+# torch comes from the vast pytorch image or the conda env
+numpy
+pillow
+tensorboard

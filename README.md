@@ -1,34 +1,24 @@
 # petri clash
 
-two neural cellular automata grow on the same grid and fight over it.
+this repo is split into two self-contained versions.
 
-## run it
+## layout
+
+- `v1/` is the original baseline from `main`
+- `v2/` is the newer training and clash stack from the `v2-single-gpu-training` line
+
+they do not share code, targets, or weights.
+
+## use
+
+for the original version:
 
 ```bash
-conda env create -f environment.yml
-conda activate petri-clash
-python clash.py
+cd v1
 ```
 
-on a fresh repo, `clash.py` will do a quick bootstrap train for any missing weights and save them in `weights/`.
-
-for a better organism, train a target properly:
+for the newer version:
 
 ```bash
-python train.py --target targets/01_heart.png --steps 3000
+cd v2
 ```
-
-## notebook
-
-there is a detailed implementation walkthrough in `petri_clash_walkthrough.ipynb`.
-
-it goes through the build in detail, including the nca core, the training loop, the clash loop, and the bug fixes that happened along the way.
-
-## controls
-
-- `space` pause / resume
-- `r` reset seed positions
-- `1` to `9` pick the left organism target
-- `shift+1` to `shift+9` pick the right organism target
-- left click drops a damage crater
-- `esc` quits
