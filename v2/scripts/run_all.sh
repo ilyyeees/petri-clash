@@ -11,4 +11,4 @@ mkdir -p runs_v2/logs
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG="runs_v2/logs/train_all-${STAMP}.log"
 
-PYTHONUNBUFFERED=1 python3 v2/train_all_v2.py --config "$CONFIG" "$@" | tee "$LOG"
+PYTHONUNBUFFERED=1 python3 -m v2.train_all_v2 --config "$CONFIG" "$@" | tee "$LOG"

@@ -1,8 +1,5 @@
 import argparse
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 
@@ -33,12 +30,14 @@ def main():
             "batch_size": min(4, base["train"]["batch_size"]),
             "save_every": 4,
             "eval_every": 4,
+            "preview_every": 4,
         },
         "eval": {
             "steps": [8, 16],
             "preview_steps": [8, 16],
             "damage_after": 8,
             "recover_steps": 8,
+            "recovery_preview_steps": [0, 4, 8],
         },
     }
     if device != "cuda":

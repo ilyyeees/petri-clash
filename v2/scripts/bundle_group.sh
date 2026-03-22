@@ -7,4 +7,4 @@ cd "$ROOT"
 CONFIG="${1:-v2/configs/rtx5090_base.toml}"
 shift || true
 
-python3 v2/bundle_run.py --config "$CONFIG" "$@"
+python3 -m v2.bundle_run --config "$CONFIG" "$@"

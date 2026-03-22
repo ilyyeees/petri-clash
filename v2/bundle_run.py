@@ -1,9 +1,6 @@
 import argparse
 import tarfile
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from v2.common import load_config, now_stamp
 

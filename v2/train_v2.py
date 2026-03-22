@@ -4,13 +4,14 @@ import math
 import time
 from contextlib import nullcontext
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 import torch.nn.functional as F
-from PIL import Image
+
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except Exception:
+    SummaryWriter = None
 
 from nca import make_seed
 from v2.common import (
@@ -189,16 +190,27 @@ def preview_sheet(target, rollout_frames, recovery_frames, config):
     return contact_sheet(images, columns=min(4, len(images)))
 
 
-def evaluate_model(model, target, config, device, out_path=None):
+def recovery_preview_steps(config):
+    steps = config["eval"].get("recovery_preview_steps", [0, config["eval"]["recover_steps"]])
+    clipped = sorted(set(int(step) for step in steps if 0 <= int(step) <= config["eval"]["recover_steps"]))
+    if 0 not in clipped:
+        clipped.insert(0, 0)
+    if config["eval"]["recover_steps"] not in clipped:
+        clipped.append(config["eval"]["recover_steps"])
+    return clipped
+
+
+def evaluate_model(model, target, config, device, out_path=None, with_metrics=True):
     model_was_training = model.training
     model.eval()
 
     size = config["data"]["grid_size"]
     yy, xx = grid_cache(size, device)
-    masks = build_masks(target, config)
-    eval_steps = sorted(set(int(step) for step in config["eval"]["steps"]))
+    masks = build_masks(target, config) if with_metrics else None
+    eval_steps = sorted(set(int(step) for step in config["eval"]["steps"])) if with_metrics else []
     preview_steps = sorted(set(int(step) for step in config["eval"]["preview_steps"]))
-    max_step = max(eval_steps + preview_steps + [config["eval"]["damage_after"] + config["eval"]["recover_steps"]])
+    recovery_steps = recovery_preview_steps(config)
+    max_step = max(eval_steps + preview_steps + [config["eval"]["damage_after"]])
 
     state = make_seed_batch(1, config, device)
     state = maybe_channels_last(state, config, device)
@@ -211,10 +223,13 @@ def evaluate_model(model, target, config, device, out_path=None):
             state = model(state, steps=1)
             if step in preview_steps:
                 rollout_frames.append(state.clone())
-            if step in eval_steps:
+            if with_metrics and step in eval_steps:
                 rollout_points.append({"step": step, **scalar_blob(loss_terms(state, target, masks, config))})
             if step == config["eval"]["damage_after"]:
                 damage_before = state.clone()
+
+        if damage_before is None:
+            damage_before = state.clone()
 
         radius = max(2, int(round(size * config["eval"]["damage_radius_frac"])))
         recovery_start = crater_state(
@@ -225,19 +240,23 @@ def evaluate_model(model, target, config, device, out_path=None):
             size // 2,
             size // 2,
         )
-        recovery_frames = [recovery_start.clone()]
+        recovery_frames = []
+        if 0 in recovery_steps:
+            recovery_frames.append(recovery_start.clone())
         recovery_state = recovery_start
-        for _ in range(config["eval"]["recover_steps"]):
+        for recovery_step in range(1, config["eval"]["recover_steps"] + 1):
             recovery_state = model(recovery_state, steps=1)
-        recovery_frames.append(recovery_state.clone())
-        recovery_metrics = scalar_blob(loss_terms(recovery_state, target, masks, config))
-
-    score = eval_score(rollout_points, recovery_metrics, config)
-    summary = {
-        "score": score,
-        "recovery": recovery_metrics,
-        "points": rollout_points,
-    }
+            if recovery_step in recovery_steps:
+                recovery_frames.append(recovery_state.clone())
+        summary = None
+        if with_metrics:
+            recovery_metrics = scalar_blob(loss_terms(recovery_state, target, masks, config))
+            score = eval_score(rollout_points, recovery_metrics, config)
+            summary = {
+                "score": score,
+                "recovery": recovery_metrics,
+                "points": rollout_points,
+            }
 
     if out_path is not None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -248,6 +267,30 @@ def evaluate_model(model, target, config, device, out_path=None):
     return summary
 
 
+def scheduler_from_config(optimizer, config):
+    schedule = str(config["train"].get("lr_schedule", "none")).lower()
+    if schedule in {"", "none"}:
+        return None
+
+    total_steps = max(1, int(config["train"]["steps"]))
+    warmup_steps = max(0, int(config["train"].get("warmup_steps", 0)))
+    min_lr_scale = float(config["train"].get("min_lr_scale", 0.1))
+
+    def scale_for(step_index):
+        step_index = int(step_index)
+        if warmup_steps > 0 and step_index < warmup_steps:
+            return max(1, step_index + 1) / warmup_steps
+
+        progress_span = max(total_steps - warmup_steps, 1)
+        progress = min(max(step_index - warmup_steps, 0), progress_span) / progress_span
+        if schedule == "cosine":
+            cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+            return min_lr_scale + (1.0 - min_lr_scale) * cosine
+        return 1.0
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=scale_for)
+
+
 def latest_checkpoint_path(run_dir):
     return Path(run_dir) / "checkpoints" / "latest.pt"
 
@@ -256,7 +299,7 @@ def best_checkpoint_path(run_dir):
     return Path(run_dir) / "checkpoints" / "best.pt"
 
 
-def save_latest_checkpoint(run_dir, model, optimizer, scaler, pool, step, best_score, config):
+def save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, step, best_score, config):
     path = latest_checkpoint_path(run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -266,6 +309,7 @@ def save_latest_checkpoint(run_dir, model, optimizer, scaler, pool, step, best_s
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "scaler": scaler.state_dict() if scaler.is_enabled() else None,
+            "scheduler": scheduler.state_dict() if scheduler is not None else None,
             "pool": pool.detach().cpu().half(),
             "rng": checkpoint_rng_blob(),
             "config": config,
@@ -292,7 +336,7 @@ def save_best_checkpoint(run_dir, model, step, score, summary, config):
     save_json(Path(run_dir) / "best_summary.json", {"step": step, "score": score, "summary": summary})
 
 
-def try_resume(run_dir, model, optimizer, scaler, device):
+def try_resume(run_dir, model, optimizer, scaler, scheduler, device):
     path = latest_checkpoint_path(run_dir)
     if not path.exists():
         return None
@@ -302,6 +346,8 @@ def try_resume(run_dir, model, optimizer, scaler, device):
     optimizer.load_state_dict(blob["optimizer"])
     if scaler.is_enabled() and blob.get("scaler") is not None:
         scaler.load_state_dict(blob["scaler"])
+    if scheduler is not None and blob.get("scheduler") is not None:
+        scheduler.load_state_dict(blob["scheduler"])
     restore_rng_blob(blob.get("rng"))
     pool = blob["pool"].float().to(device)
     return {
@@ -334,9 +380,11 @@ def train_target(config, target_path, seed):
         lr=config["train"]["lr"],
         weight_decay=config["train"]["weight_decay"],
     )
+    scheduler = scheduler_from_config(optimizer, config)
     amp_enabled = config["train"].get("amp", True) and device == "cuda"
     amp_dtype = dtype_from_name(config["train"].get("amp_dtype", "bfloat16"))
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+    writer = SummaryWriter(run_dir / "tensorboard") if SummaryWriter is not None else None
 
     size = config["data"]["grid_size"]
     pool = make_seed_batch(config["train"]["pool_size"], config, device)
@@ -349,7 +397,7 @@ def train_target(config, target_path, seed):
     start_step = 0
     best_score = math.inf
     if config["train"].get("resume", True):
-        resumed = try_resume(run_dir, model, optimizer, scaler, device)
+        resumed = try_resume(run_dir, model, optimizer, scaler, scheduler, device)
         if resumed is not None:
             start_step = resumed["step"]
             best_score = resumed["best_score"]
@@ -357,6 +405,8 @@ def train_target(config, target_path, seed):
             print(f"resumed {target_path.stem} seed {seed} from step {start_step}")
 
     if start_step >= config["train"]["steps"]:
+        if writer is not None:
+            writer.close()
         print(f"{target_path.stem} seed {seed} already finished")
         return run_dir
 
@@ -404,6 +454,8 @@ def train_target(config, target_path, seed):
             if config["train"]["grad_clip"] > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config["train"]["grad_clip"])
             optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
 
         batch = batch.detach()
         pool[batch_ids] = batch
@@ -413,24 +465,40 @@ def train_target(config, target_path, seed):
         if step % 25 == 0 or step == start_step + 1 or step == config["train"]["steps"]:
             elapsed = max(time.time() - start_time, 1e-6)
             speed = (step - start_step) / elapsed
+            lr = optimizer.param_groups[0]["lr"]
             blob = {
                 "kind": "train",
                 "step": step,
                 "rollout": rollout,
                 "speed": speed,
+                "lr": lr,
             }
             for key, value in losses.items():
                 blob[key] = float(value.detach())
             append_jsonl(metrics_path, blob)
+            if writer is not None:
+                writer.add_scalar("train/total", blob["total"], step)
+                writer.add_scalar("train/rgb", blob["rgb"], step)
+                writer.add_scalar("train/alpha", blob["alpha"], step)
+                writer.add_scalar("train/overflow_alpha", blob["overflow_alpha"], step)
+                writer.add_scalar("train/lr", blob["lr"], step)
             print(
                 f"{target_path.stem} seed {seed} "
                 f"step {step:5d}/{config['train']['steps']} "
                 f"loss {blob['total']:.5f} rollout {rollout:3d} "
-                f"speed {speed:.2f} it/s"
+                f"lr {lr:.6f} speed {speed:.2f} it/s"
             )
 
-        if step % config["train"]["eval_every"] == 0 or step == config["train"]["steps"]:
-            preview_path = run_dir / "previews" / f"step_{step:05d}.png"
+        preview_every = int(config["train"].get("preview_every", 0) or 0)
+        should_eval = step % config["train"]["eval_every"] == 0 or step == config["train"]["steps"]
+        should_preview = preview_every > 0 and (step % preview_every == 0 or step == config["train"]["steps"]) and not should_eval
+
+        if should_preview:
+            preview_path = run_dir / "previews" / f"step_{step:05d}_preview.png"
+            evaluate_model(model, target, config, device, out_path=preview_path, with_metrics=False)
+
+        if should_eval:
+            preview_path = run_dir / "previews" / f"step_{step:05d}_eval.png"
             summary = evaluate_model(model, target, config, device, out_path=preview_path)
             append_jsonl(
                 metrics_path,
@@ -443,6 +511,10 @@ def train_target(config, target_path, seed):
                     "preview": str(preview_path),
                 },
             )
+            if writer is not None:
+                writer.add_scalar("eval/score", summary["score"], step)
+                writer.add_scalar("eval/recovery_total", summary["recovery"]["total"], step)
+                writer.add_scalar("eval/tail_total", summary["points"][-1]["total"], step)
             print(
                 f"{target_path.stem} seed {seed} eval "
                 f"step {step:5d} score {summary['score']:.5f} "
@@ -453,7 +525,7 @@ def train_target(config, target_path, seed):
                 save_best_checkpoint(run_dir, model, step, best_score, summary, resolved)
 
         if step % config["train"]["save_every"] == 0 or step == config["train"]["steps"]:
-            save_latest_checkpoint(run_dir, model, optimizer, scaler, pool, step, best_score, resolved)
+            save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, step, best_score, resolved)
 
     append_jsonl(
         metrics_path,
@@ -464,6 +536,8 @@ def train_target(config, target_path, seed):
             "time": now_stamp(),
         },
     )
+    if writer is not None:
+        writer.close()
     return run_dir
 
 

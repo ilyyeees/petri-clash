@@ -30,6 +30,8 @@ the playable baseline still lives in the root scripts.
 
 for remote long-horizon training on a box like an rtx 5090, use the `v2/` stack instead. the setup and workflow are in `v2/README.md`.
 
+that stack now uses resumable checkpoints, a cosine lr schedule, tensorboard logs, and shell wrappers built around `python -m v2...` entrypoints.
+
 ## controls
 
 - `space` pause / resume

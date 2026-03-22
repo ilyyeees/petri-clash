@@ -1,9 +1,6 @@
 import argparse
 import json
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from v2.common import list_target_paths, run_dir_for, save_json
 from v2.train_v2 import resolve_config, train_target

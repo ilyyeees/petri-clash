@@ -8,7 +8,7 @@ CONFIG="${1:-v2/configs/rtx5090_base.toml}"
 TARGET="${2:-}"
 
 if [[ -n "$TARGET" ]]; then
-  PYTHONUNBUFFERED=1 python3 v2/preflight.py --config "$CONFIG" --target "$TARGET"
+  PYTHONUNBUFFERED=1 python3 -m v2.preflight --config "$CONFIG" --target "$TARGET"
 else
-  PYTHONUNBUFFERED=1 python3 v2/preflight.py --config "$CONFIG"
+  PYTHONUNBUFFERED=1 python3 -m v2.preflight --config "$CONFIG"
 fi

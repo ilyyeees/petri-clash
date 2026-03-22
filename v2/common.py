@@ -96,9 +96,13 @@ def model_from_config(config, device):
     if config["train"].get("channels_last", False) and device == "cuda":
         model = model.to(memory_format=torch.channels_last)
 
-    if device == "cuda" and config["train"].get("compile", False) and hasattr(model, "compile"):
+    if device == "cuda" and config["train"].get("compile", False) and hasattr(torch, "compile"):
         try:
-            model.compile()
+            compile_kwargs = {}
+            compile_mode = config["train"].get("compile_mode")
+            if compile_mode:
+                compile_kwargs["mode"] = compile_mode
+            model = torch.compile(model, **compile_kwargs)
         except Exception as exc:
             print(f"compile skipped: {exc}")
 

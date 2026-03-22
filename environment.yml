@@ -6,6 +6,7 @@ dependencies:
   - numpy
   - pillow
   - pytorch
+  - tensorboard
   - pip
   - pip:
       - pygame

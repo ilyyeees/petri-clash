@@ -10,6 +10,10 @@ the main idea is simple:
 - make every run exportable as a small bundle
 - optimize for a box like an rtx 5090 instead of a laptop cpu
 
+torch is intentionally not pinned in `v2/requirements.txt`.
+
+the expectation is that you use a vast pytorch image or the local conda env from the repo root. the bootstrap script checks that torch is already there and that the build is new enough for a 5090.
+
 ## what is here
 
 - `train_v2.py` trains one target with stronger losses and longer rollout curriculum
@@ -19,6 +23,7 @@ the main idea is simple:
 - `bundle_run.py` packs the useful outputs into a small tarball
 - `configs/rtx5090_base.toml` is the default all-target config
 - `scripts/` contains the shell wrappers for remote use
+- tensorboard logs land inside each run dir
 
 ## why this exists
 
@@ -33,6 +38,7 @@ this stack changes that by doing a few specific things:
 - it evaluates checkpoints at longer horizons instead of trusting only training loss
 - it saves a best checkpoint and a resumable latest checkpoint
 - it writes previews and metrics automatically
+- it logs scalar metrics to tensorboard
 
 ## expected remote workflow
 
@@ -51,6 +57,12 @@ to monitor:
 
 ```bash
 bash v2/scripts/status.sh
+```
+
+to watch tensorboard on the machine:
+
+```bash
+tensorboard --logdir runs_v2
 ```
 
 to make a compact archive of the best outputs:
@@ -81,6 +93,7 @@ inside each run you will get:
 - `checkpoints/best.pt`
 - preview pngs
 - `best_summary.json`
+- `tensorboard/`
 
 the archive script only grabs the important pieces so retrieval stays fast.
 

@@ -8,8 +8,12 @@ python3 -m pip install --upgrade pip setuptools wheel
 python3 -m pip install -r v2/requirements.txt
 
 python3 - <<'PY'
-import sys
-import torch
+try:
+    import torch
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        "torch is not installed in this image. use Vast's pytorch template with the automatic image tag."
+    ) from exc
 
 def parse_version(text):
     base = text.split("+", 1)[0]
