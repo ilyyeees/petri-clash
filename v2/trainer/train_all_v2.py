@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from trainer.common import list_target_paths, run_dir_for, save_json
+from trainer.common import list_target_paths, project_path, run_dir_for, save_json
 from trainer.train_v2 import resolve_config, train_target
 
 
@@ -66,7 +66,7 @@ def run_status(run_dir):
 
 
 def write_group_summary(config, target_paths, seeds):
-    group_root = Path(config["run"]["output_root"]) / config["run"]["group_name"]
+    group_root = project_path(config["run"]["output_root"]) / config["run"]["group_name"]
     summary = {"group": config["run"]["group_name"], "targets": {}}
 
     for target_path in target_paths:

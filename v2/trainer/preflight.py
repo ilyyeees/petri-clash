@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from trainer.common import load_config, merge_dict, pick_device, save_json
+from trainer.common import list_target_paths, load_config, merge_dict, pick_device, project_path, save_json
 from trainer.train_v2 import train_target
 
 
@@ -18,7 +18,7 @@ def parse_args():
 def main():
     args = parse_args()
     base = load_config(args.config)
-    target = Path(args.target) if args.target else sorted(Path(".").glob(base["run"]["target_glob"]))[0]
+    target = project_path(args.target) if args.target else list_target_paths(base)[0]
     device = pick_device(base["runtime"].get("device", "auto"))
 
     overrides = {

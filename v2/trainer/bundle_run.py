@@ -2,7 +2,7 @@ import argparse
 import tarfile
 from pathlib import Path
 
-from trainer.common import load_config, now_stamp
+from trainer.common import load_config, now_stamp, project_path
 
 
 def parse_args():
@@ -50,12 +50,12 @@ def main():
     config = load_config(args.config)
 
     if args.run_dir:
-        source = Path(args.run_dir)
+        source = project_path(args.run_dir)
         files = files_for_run(source)
         default_name = f"{source.name}-{now_stamp()}.tar.gz"
         base_dir = source
     else:
-        source = Path(args.group_dir) if args.group_dir else Path(config["run"]["output_root"]) / config["run"]["group_name"]
+        source = project_path(args.group_dir) if args.group_dir else project_path(config["run"]["output_root"]) / config["run"]["group_name"]
         files = files_for_group(source)
         default_name = f"{source.name}-{now_stamp()}.tar.gz"
         base_dir = source.parent
@@ -63,7 +63,7 @@ def main():
     if not files:
         raise SystemExit(f"nothing to bundle under {source}")
 
-    out_path = Path(args.out) if args.out else Path("bundles_v2") / default_name
+    out_path = project_path(args.out) if args.out else project_path("bundles_v2") / default_name
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tarfile.open(out_path, "w:gz") as handle:

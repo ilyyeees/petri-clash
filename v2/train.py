@@ -3,11 +3,11 @@ import json
 import shutil
 from pathlib import Path
 
-from trainer.common import load_target
+from trainer.common import PROJECT_ROOT, project_path
 from trainer.train_v2 import resolve_config, train_target as run_single_target
 
 
-DEFAULT_CONFIG = "trainer/configs/single_gpu_base.toml"
+DEFAULT_CONFIG = PROJECT_ROOT / "trainer" / "configs" / "single_gpu_base.toml"
 
 
 def best_preview_path(run_dir):
@@ -26,9 +26,20 @@ def best_preview_path(run_dir):
     return None
 
 
+def resolve_target_path(target_path):
+    target_path = Path(target_path)
+    if target_path.is_absolute() or target_path.exists():
+        return target_path
+
+    candidate = PROJECT_ROOT / target_path
+    if candidate.exists():
+        return candidate
+    return target_path
+
+
 def export_run(run_dir, target_path, seed=0, export_root="weights"):
     run_dir = Path(run_dir)
-    export_dir = Path(export_root) / Path(target_path).stem / f"seed_{int(seed):03d}"
+    export_dir = project_path(export_root) / Path(target_path).stem / f"seed_{int(seed):03d}"
     checkpoint_dir = export_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,6 +86,7 @@ def train_target(
     no_compile=False,
     no_amp=False,
 ):
+    target_path = resolve_target_path(target_path)
     config = resolve_config(config_path)
 
     if steps is not None:

@@ -10,6 +10,8 @@ from PIL import Image
 
 from nca import NCA
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 def load_target(path, target_size=40, grid_size=48, device="cpu"):
     image = Image.open(path).convert("RGBA")
@@ -24,8 +26,15 @@ def load_target(path, target_size=40, grid_size=48, device="cpu"):
     return tensor.to(device)
 
 
+def project_path(path):
+    path = Path(path)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
 def load_config(path):
-    with open(path, "rb") as handle:
+    with open(project_path(path), "rb") as handle:
         return tomllib.load(handle)
 
 
@@ -131,8 +140,7 @@ def target_tensor_from_config(path, config, device):
 
 
 def list_target_paths(config):
-    root = Path(".")
-    paths = sorted(root.glob(config["run"]["target_glob"]))
+    paths = sorted(PROJECT_ROOT.glob(config["run"]["target_glob"]))
     if not paths:
         raise SystemExit(f"no targets matched {config['run']['target_glob']}")
     return paths
@@ -140,7 +148,7 @@ def list_target_paths(config):
 
 def run_dir_for(config, target_path, seed):
     return (
-        Path(config["run"]["output_root"])
+        project_path(config["run"]["output_root"])
         / config["run"]["group_name"]
         / Path(target_path).stem
         / f"seed_{int(seed):03d}"

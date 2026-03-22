@@ -14,11 +14,12 @@ from train import train_target
 from trainer.train_v2 import resolve_config
 
 
-DEFAULT_TRAIN_CONFIG = "trainer/configs/single_gpu_base.toml"
+V2_ROOT = Path(__file__).resolve().parent
+DEFAULT_TRAIN_CONFIG = V2_ROOT / "trainer" / "configs" / "single_gpu_base.toml"
 
 
 def list_targets():
-    return sorted(Path("targets").glob("*.png"))
+    return sorted((V2_ROOT / "targets").glob("*.png"))
 
 
 def normalize_state_dict(state_dict):
@@ -62,7 +63,7 @@ def maybe_channels_last(tensor, enabled, device):
 
 
 def discover_v2_checkpoint(target_path, preferred_seed=None):
-    target_dir = Path("weights") / target_path.stem
+    target_dir = V2_ROOT / "weights" / target_path.stem
     if not target_dir.is_dir():
         return None
 
@@ -154,7 +155,7 @@ def ensure_model(target_path, device, bootstrap_steps, preferred_seed=None):
         print(f"loaded {target_path.stem} from {bundle['source']} ({bundle['seed_dir']}{score_text})")
         return bundle
 
-    weight_path = Path("weights") / f"{target_path.stem}.pt"
+    weight_path = V2_ROOT / "weights" / f"{target_path.stem}.pt"
     if weight_path.exists():
         print(
             f"ignoring legacy flat weight {weight_path.name}; "
@@ -180,7 +181,7 @@ def ensure_model(target_path, device, bootstrap_steps, preferred_seed=None):
 
     print(
         f"missing v2 weights for {target_path.stem}; "
-        f"run `python train.py --target {target_path}` or pass --bootstrap-steps"
+        f"run `python v2/train.py --target {target_path}` or pass --bootstrap-steps"
     )
     return default_model_bundle(device)
 
@@ -349,7 +350,7 @@ def main():
 
     targets = list_targets()
     if not targets:
-        raise SystemExit("no targets found in targets/")
+        raise SystemExit(f"no targets found in {V2_ROOT / 'targets'}")
 
     if args.headless_frames > 0:
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
