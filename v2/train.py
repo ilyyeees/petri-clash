@@ -1,222 +1,133 @@
 import argparse
-import random
-import time
+import json
+import shutil
 from pathlib import Path
 
-import numpy as np
-import torch
-from PIL import Image
-
-from nca import NCA, make_seed, pick_device
+from trainer.common import load_target
+from trainer.train_v2 import resolve_config, train_target as run_single_target
 
 
-def load_target(path, target_size=40, grid_size=48, device="cpu"):
-    image = Image.open(path).convert("RGBA")
-    image = image.resize((target_size, target_size), Image.Resampling.LANCZOS)
-
-    canvas = Image.new("RGBA", (grid_size, grid_size), (0, 0, 0, 0))
-    offset = ((grid_size - target_size) // 2, (grid_size - target_size) // 2)
-    canvas.paste(image, offset, image)
-
-    array = np.asarray(canvas, dtype=np.float32) / 255.0
-    tensor = torch.from_numpy(array).permute(2, 0, 1).unsqueeze(0)
-    return tensor.to(device)
+DEFAULT_CONFIG = "trainer/configs/single_gpu_base.toml"
 
 
-def save_checkpoint(model, out_path, args, target_path, train_steps):
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    blob = {
-        "state_dict": model.state_dict(),
-        "target_name": target_path.stem,
-        "target_path": str(target_path),
-        "train_steps": train_steps,
-        "grid_size": args.grid_size,
-        "target_size": args.target_size,
-        "channels": model.channels,
-        "hidden_size": model.hidden_size,
-        "fire_rate": model.fire_rate,
-    }
-    torch.save(blob, out_path)
+def best_preview_path(run_dir):
+    summary_path = Path(run_dir) / "best_summary.json"
+    if not summary_path.exists():
+        return None
+
+    try:
+        step = int(json.loads(summary_path.read_text())["step"])
+    except Exception:
+        return None
+
+    preview_path = Path(run_dir) / "previews" / f"step_{step:05d}_eval.png"
+    if preview_path.exists():
+        return preview_path
+    return None
 
 
-def damage_batch(batch, damage_prob=0.5):
-    if damage_prob <= 0:
-        return batch
+def export_run(run_dir, target_path, seed=0, export_root="weights"):
+    run_dir = Path(run_dir)
+    export_dir = Path(export_root) / Path(target_path).stem / f"seed_{int(seed):03d}"
+    checkpoint_dir = export_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    size = batch.shape[-1]
-    yy = torch.arange(size, device=batch.device).view(1, 1, size, 1)
-    xx = torch.arange(size, device=batch.device).view(1, 1, 1, size)
+    best_checkpoint = run_dir / "checkpoints" / "best.pt"
+    if not best_checkpoint.exists():
+        raise SystemExit(f"missing best checkpoint in {run_dir}")
 
-    for index in range(1, batch.shape[0]):
-        if random.random() > damage_prob:
-            continue
-        radius = random.randint(max(2, size // 8), max(3, size // 4))
-        cx = random.randint(radius, size - radius - 1)
-        cy = random.randint(radius, size - radius - 1)
-        crater = ((xx - cx).pow(2) + (yy - cy).pow(2)) <= radius * radius
-        batch[index] = torch.where(
-            crater.expand_as(batch[index : index + 1]),
-            torch.zeros_like(batch[index : index + 1]),
-            batch[index : index + 1],
-        )[0]
-    return batch
+    shutil.copy2(best_checkpoint, checkpoint_dir / "best.pt")
+
+    for name in ["best_summary.json", "resolved_config.json"]:
+        src = run_dir / name
+        if src.exists():
+            shutil.copy2(src, export_dir / name)
+
+    preview_path = best_preview_path(run_dir)
+    if preview_path is not None:
+        shutil.copy2(preview_path, export_dir / preview_path.name)
+
+    return checkpoint_dir / "best.pt"
+
+
+def normalize_config(config):
+    steps = int(config["train"]["steps"])
+    config["train"]["save_every"] = max(1, min(int(config["train"]["save_every"]), steps))
+    config["train"]["eval_every"] = max(1, min(int(config["train"]["eval_every"]), steps))
+
+    preview_every = int(config["train"].get("preview_every", 0) or 0)
+    if preview_every > 0:
+        config["train"]["preview_every"] = max(1, min(preview_every, steps))
+
+    return config
 
 
 def train_target(
     target_path,
-    out_path=None,
-    steps=3000,
-    pool_size=1024,
-    batch_size=8,
-    grid_size=48,
-    target_size=40,
-    min_rollout=64,
-    max_rollout=96,
-    lr=2e-3,
-    save_every=250,
+    steps=None,
     seed=0,
     device=None,
-    damage_prob=0.5,
-    resume=True,
+    config_path=DEFAULT_CONFIG,
+    group_name=None,
+    batch_size=None,
+    pool_size=None,
+    export_root="weights",
+    no_compile=False,
+    no_amp=False,
 ):
-    if device is None:
-        device = pick_device()
+    config = resolve_config(config_path)
 
-    target_path = Path(target_path)
-    if not target_path.exists():
-        raise SystemExit(f"missing target: {target_path}")
-
-    if out_path is None:
-        out_path = Path("weights") / f"{target_path.stem}.pt"
+    if steps is not None:
+        config["train"]["steps"] = int(steps)
+    if device:
+        config["runtime"]["device"] = device
+    if group_name:
+        config["run"]["group_name"] = group_name
     else:
-        out_path = Path(out_path)
+        config["run"]["group_name"] = "single_target_train"
+    if batch_size is not None:
+        config["train"]["batch_size"] = int(batch_size)
+    if pool_size is not None:
+        config["train"]["pool_size"] = int(pool_size)
+    if no_compile:
+        config["train"]["compile"] = False
+    if no_amp:
+        config["train"]["amp"] = False
 
-    if seed:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-
-    args = argparse.Namespace(
-        grid_size=grid_size,
-        target_size=target_size,
-    )
-
-    target = load_target(
-        target_path,
-        target_size=target_size,
-        grid_size=grid_size,
-        device=device,
-    )
-
-    model = NCA().to(device)
-    start_step = 0
-    if resume and out_path.exists():
-        blob = torch.load(out_path, map_location=device)
-        if blob.get("target_name") == target_path.stem:
-            model.load_state_dict(blob["state_dict"])
-            start_step = int(blob.get("train_steps", 0) or 0)
-            print(f"resuming {target_path.name} from step {start_step}")
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    pool = make_seed(
-        pool_size,
-        height=grid_size,
-        width=grid_size,
-        device=device,
-    )
-    fresh_seed = make_seed(
-        1,
-        height=grid_size,
-        width=grid_size,
-        device=device,
-    )[0]
-
-    save_every = max(1, save_every)
-
-    if start_step >= steps:
-        print(f"{target_path.name} already has {start_step} steps")
-        return out_path
-
-    print(f"training {target_path.name} on {device}")
-    start = time.time()
-    ema = None
-
-    for step in range(start_step + 1, steps + 1):
-        batch_ids = torch.randint(pool_size, (batch_size,), device=device)
-        batch = pool[batch_ids].clone()
-
-        # one fresh seed in the batch keeps the organism honest
-        batch[0] = fresh_seed
-        batch = damage_batch(batch, damage_prob=damage_prob)
-
-        rollout = random.randint(min_rollout, max_rollout)
-        batch = model(batch, steps=rollout)
-        losses = (batch[:, :4] - target).pow(2).mean(dim=(1, 2, 3))
-        loss = losses.mean()
-
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
-
-        batch = batch.detach()
-        pool[batch_ids] = batch
-        pool[batch_ids[losses.argmax()]] = fresh_seed
-
-        value = float(loss.detach())
-        ema = value if ema is None else ema * 0.98 + value * 0.02
-
-        if step % 50 == 0 or step == 1 or step == steps:
-            elapsed = max(time.time() - start, 1e-6)
-            speed = (step - start_step) / elapsed
-            print(
-                f"step {step:4d}/{steps} loss {value:.5f} ema {ema:.5f} "
-                f"rollout {rollout:2d} speed {speed:.2f} it/s"
-            )
-
-        if step % save_every == 0 or step == steps:
-            save_checkpoint(model, out_path, args, target_path, step)
-
-    print(f"saved {out_path}")
-    return out_path
+    config = normalize_config(config)
+    run_dir = run_single_target(config, Path(target_path), int(seed))
+    return export_run(run_dir, target_path, seed=seed, export_root=export_root)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True)
-    parser.add_argument("--out")
-    parser.add_argument("--steps", type=int, default=3000)
-    parser.add_argument("--pool-size", type=int, default=1024)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--grid-size", type=int, default=48)
-    parser.add_argument("--target-size", type=int, default=40)
-    parser.add_argument("--min-rollout", type=int, default=64)
-    parser.add_argument("--max-rollout", type=int, default=96)
-    parser.add_argument("--lr", type=float, default=2e-3)
-    parser.add_argument("--save-every", type=int, default=250)
+    parser.add_argument("--config", default=DEFAULT_CONFIG)
+    parser.add_argument("--steps", type=int)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--device", default=pick_device())
-    parser.add_argument("--damage-prob", type=float, default=0.5)
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument("--device")
+    parser.add_argument("--group-name")
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--pool-size", type=int)
+    parser.add_argument("--export-root", default="weights")
+    parser.add_argument("--no-compile", action="store_true")
+    parser.add_argument("--no-amp", action="store_true")
     args = parser.parse_args()
 
-    train_target(
+    checkpoint_path = train_target(
         args.target,
-        out_path=args.out,
         steps=args.steps,
-        pool_size=args.pool_size,
-        batch_size=args.batch_size,
-        grid_size=args.grid_size,
-        target_size=args.target_size,
-        min_rollout=args.min_rollout,
-        max_rollout=args.max_rollout,
-        lr=args.lr,
-        save_every=args.save_every,
         seed=args.seed,
         device=args.device,
-        damage_prob=args.damage_prob,
-        resume=args.resume or not args.no_resume,
+        config_path=args.config,
+        group_name=args.group_name,
+        batch_size=args.batch_size,
+        pool_size=args.pool_size,
+        export_root=args.export_root,
+        no_compile=args.no_compile,
+        no_amp=args.no_amp,
     )
+    print(f"exported {checkpoint_path}")
 
 
 if __name__ == "__main__":

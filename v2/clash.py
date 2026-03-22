@@ -11,6 +11,10 @@ import torch.nn.functional as F
 
 from nca import NCA, make_seed, pick_device
 from train import train_target
+from trainer.train_v2 import resolve_config
+
+
+DEFAULT_TRAIN_CONFIG = "trainer/configs/single_gpu_base.toml"
 
 
 def list_targets():
@@ -120,24 +124,25 @@ def load_v2_model(checkpoint_path, device):
     }
 
 
-def load_v1_model(weight_path, device):
-    blob = torch.load(weight_path, map_location=device, weights_only=False)
+def default_model_bundle(device):
+    config = resolve_config(DEFAULT_TRAIN_CONFIG)
+    model_cfg = config["model"]
+    channels_last = bool(config.get("train", {}).get("channels_last", False))
     model = NCA(
-        channels=int(blob.get("channels", 16)),
-        hidden_size=int(blob.get("hidden_size", 128)),
-        fire_rate=float(blob.get("fire_rate", 0.5)),
+        channels=int(model_cfg["channels"]),
+        hidden_size=int(model_cfg["hidden_size"]),
+        fire_rate=float(model_cfg["fire_rate"]),
     ).to(device)
-    model.load_state_dict(normalize_state_dict(blob["state_dict"]))
+    if channels_last and device == "cuda":
+        model = model.to(memory_format=torch.channels_last)
     model.eval()
-
     return {
         "model": model,
-        "channels": int(blob.get("channels", 16)),
-        "grid_size": int(blob.get("grid_size", 48) or 48),
-        "channels_last": False,
-        "kind": "v1",
-        "source": str(weight_path),
-        "train_steps": int(blob.get("train_steps", 0) or 0),
+        "channels": int(model_cfg["channels"]),
+        "grid_size": int(config["data"]["grid_size"]),
+        "channels_last": channels_last,
+        "kind": "scratch",
+        "source": "untrained-v2",
     }
 
 
@@ -151,38 +156,33 @@ def ensure_model(target_path, device, bootstrap_steps, preferred_seed=None):
 
     weight_path = Path("weights") / f"{target_path.stem}.pt"
     if weight_path.exists():
-        bundle = load_v1_model(weight_path, device)
-        print(f"loaded {target_path.stem} from {weight_path.name} ({bundle['train_steps']} steps)")
-        return bundle
+        print(
+            f"ignoring legacy flat weight {weight_path.name}; "
+            f"v2 only uses weights/{target_path.stem}/seed_###/checkpoints/best.pt"
+        )
 
     if bootstrap_steps > 0:
-        print(f"bootstrapping {target_path.name} for {bootstrap_steps} steps")
-        train_target(
+        print(f"bootstrapping {target_path.name} with the v2 trainer for {bootstrap_steps} steps")
+        checkpoint_path = train_target(
             target_path,
-            out_path=weight_path,
             steps=bootstrap_steps,
-            pool_size=256,
-            batch_size=4,
-            min_rollout=32,
-            max_rollout=48,
-            save_every=bootstrap_steps,
             device=device,
+            group_name="clash_bootstrap",
+            batch_size=32 if device == "cuda" else 8,
+            pool_size=1024 if device == "cuda" else 256,
+            no_compile=True,
+            no_amp=device != "cuda",
         )
-        bundle = load_v1_model(weight_path, device)
-        print(f"loaded {target_path.stem} from {weight_path.name} ({bundle['train_steps']} steps)")
+        bundle = load_v2_model(checkpoint_path, device)
+        score_text = f" score {bundle['score']:.5f}" if bundle["score"] < float("inf") else ""
+        print(f"loaded {target_path.stem} from {bundle['source']} ({bundle['seed_dir']}{score_text})")
         return bundle
 
-    print(f"missing weights for {target_path.stem}, using an untrained rule")
-    model = NCA().to(device)
-    model.eval()
-    return {
-        "model": model,
-        "channels": 16,
-        "grid_size": 48,
-        "channels_last": False,
-        "kind": "scratch",
-        "source": "untrained",
-    }
+    print(
+        f"missing v2 weights for {target_path.stem}; "
+        f"run `python train.py --target {target_path}` or pass --bootstrap-steps"
+    )
+    return default_model_bundle(device)
 
 
 def clamp(value, low, high):

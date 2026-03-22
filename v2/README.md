@@ -11,12 +11,15 @@ python clash.py
 ```
 
 on a fresh repo, `clash.py` will do a quick bootstrap train for any missing weights and save them in `weights/`.
+that bootstrap now goes through the v2 trainer and exports a seed folder like `weights/01_heart/seed_000/`.
 
 for a better organism, train a target properly:
 
 ```bash
 python train.py --target targets/01_heart.png --steps 3000
 ```
+
+`train.py` is now just a single-target wrapper around the `trainer/` stack, so it writes the same v2-format weights that `clash.py` expects.
 
 ## big gpu training
 

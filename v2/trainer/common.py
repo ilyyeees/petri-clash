@@ -9,7 +9,19 @@ import torch
 from PIL import Image
 
 from nca import NCA
-from train import load_target
+
+
+def load_target(path, target_size=40, grid_size=48, device="cpu"):
+    image = Image.open(path).convert("RGBA")
+    image = image.resize((target_size, target_size), Image.Resampling.LANCZOS)
+
+    canvas = Image.new("RGBA", (grid_size, grid_size), (0, 0, 0, 0))
+    offset = ((grid_size - target_size) // 2, (grid_size - target_size) // 2)
+    canvas.paste(image, offset, image)
+
+    array = np.asarray(canvas, dtype=np.float32) / 255.0
+    tensor = torch.from_numpy(array).permute(2, 0, 1).unsqueeze(0)
+    return tensor.to(device)
 
 
 def load_config(path):
