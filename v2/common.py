@@ -96,7 +96,7 @@ def model_from_config(config, device):
     if config["train"].get("channels_last", False) and device == "cuda":
         model = model.to(memory_format=torch.channels_last)
 
-    if config["train"].get("compile", False) and hasattr(model, "compile"):
+    if device == "cuda" and config["train"].get("compile", False) and hasattr(model, "compile"):
         try:
             model.compile()
         except Exception as exc:

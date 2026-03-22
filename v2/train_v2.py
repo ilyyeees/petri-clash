@@ -297,7 +297,7 @@ def try_resume(run_dir, model, optimizer, scaler, device):
     if not path.exists():
         return None
 
-    blob = torch.load(path, map_location=device)
+    blob = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(blob["model"])
     optimizer.load_state_dict(blob["optimizer"])
     if scaler.is_enabled() and blob.get("scaler") is not None:
@@ -481,6 +481,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int)
     parser.add_argument("--device")
+    parser.add_argument("--group-name")
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--pool-size", type=int)
     parser.add_argument("--no-compile", action="store_true")
     parser.add_argument("--no-amp", action="store_true")
     return parser.parse_args()
@@ -494,6 +497,12 @@ def main():
         overrides.setdefault("train", {})["steps"] = args.steps
     if args.device:
         overrides.setdefault("runtime", {})["device"] = args.device
+    if args.group_name:
+        overrides.setdefault("run", {})["group_name"] = args.group_name
+    if args.batch_size is not None:
+        overrides.setdefault("train", {})["batch_size"] = args.batch_size
+    if args.pool_size is not None:
+        overrides.setdefault("train", {})["pool_size"] = args.pool_size
     if args.no_compile:
         overrides.setdefault("train", {})["compile"] = False
     if args.no_amp:

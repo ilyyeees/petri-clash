@@ -12,7 +12,7 @@ from v2.train_v2 import evaluate_model, resolve_config
 
 
 def load_checkpoint(path, config, device):
-    blob = torch.load(path, map_location=device)
+    blob = torch.load(path, map_location=device, weights_only=False)
     model = model_from_config(config, device)
     model.load_state_dict(blob["model"])
     return model, blob

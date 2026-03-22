@@ -24,6 +24,12 @@ there is a detailed implementation walkthrough in `petri_clash_walkthrough.ipynb
 
 it goes through the build in detail, including the nca core, the training loop, the clash loop, and the bug fixes that happened along the way.
 
+## big gpu training
+
+the playable baseline still lives in the root scripts.
+
+for remote long-horizon training on a box like an rtx 5090, use the `v2/` stack instead. the setup and workflow are in `v2/README.md`.
+
 ## controls
 
 - `space` pause / resume
