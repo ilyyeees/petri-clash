@@ -2,7 +2,7 @@
 group_name = "single_gpu_all_targets"
 output_root = "runs_v2"
 target_glob = "targets/*.png"
-seeds = [0, 1, 2]
+seeds = [0]
 
 [runtime]
 device = "auto"
@@ -67,3 +67,14 @@ damage_radius_frac = 0.16
 best_tail = 2
 score_recovery_weight = 0.35
 preview_scale = 6
+
+[stop]
+enabled = true
+collapsed_min_step = 3000
+collapsed_patience_steps = 1000
+collapsed_score = 0.2
+collapsed_min_delta = 0.001
+converged_min_step = 10000
+converged_patience_steps = 500
+converged_score = 0.00006
+converged_min_delta = 0.000005

@@ -1,5 +1,6 @@
 import argparse
 import copy
+import json
 import math
 import time
 from contextlib import nullcontext
@@ -336,6 +337,88 @@ def save_best_checkpoint(run_dir, model, step, score, summary, config):
     save_json(Path(run_dir) / "best_summary.json", {"step": step, "score": score, "summary": summary})
 
 
+def load_eval_history(metrics_path):
+    metrics_path = Path(metrics_path)
+    if not metrics_path.exists():
+        return []
+
+    rows = []
+    for line in metrics_path.open():
+        try:
+            blob = json.loads(line)
+        except Exception:
+            continue
+        if blob.get("kind") != "eval":
+            continue
+        rows.append(
+            {
+                "step": int(blob["step"]),
+                "score": float(blob["score"]),
+                "recovery_total": float(blob["recovery_total"]),
+                "tail_total": float(blob["tail_total"]),
+            }
+        )
+    return rows
+
+
+def best_step_for_delta(eval_history, min_delta):
+    best_score = math.inf
+    best_step = 0
+    for row in eval_history:
+        score = float(row["score"])
+        if score + min_delta < best_score:
+            best_score = score
+            best_step = int(row["step"])
+    return best_step, best_score
+
+
+def maybe_stop_early(eval_history, config):
+    stop_cfg = config.get("stop", {})
+    if not stop_cfg.get("enabled", False):
+        return None
+    if not eval_history:
+        return None
+
+    latest = eval_history[-1]
+    latest_step = int(latest["step"])
+
+    collapse_step, collapse_score = best_step_for_delta(
+        eval_history,
+        float(stop_cfg.get("collapsed_min_delta", 0.0)),
+    )
+    if (
+        latest_step >= int(stop_cfg.get("collapsed_min_step", 0))
+        and collapse_score >= float(stop_cfg.get("collapsed_score", math.inf))
+        and latest_step - collapse_step >= int(stop_cfg.get("collapsed_patience_steps", 0))
+    ):
+        return {
+            "kind": "collapsed",
+            "step": latest_step,
+            "best_step": collapse_step,
+            "best_score": collapse_score,
+            "latest_score": float(latest["score"]),
+        }
+
+    converge_step, converge_score = best_step_for_delta(
+        eval_history,
+        float(stop_cfg.get("converged_min_delta", 0.0)),
+    )
+    if (
+        latest_step >= int(stop_cfg.get("converged_min_step", 0))
+        and converge_score <= float(stop_cfg.get("converged_score", -math.inf))
+        and latest_step - converge_step >= int(stop_cfg.get("converged_patience_steps", 0))
+    ):
+        return {
+            "kind": "converged",
+            "step": latest_step,
+            "best_step": converge_step,
+            "best_score": converge_score,
+            "latest_score": float(latest["score"]),
+        }
+
+    return None
+
+
 def try_resume(run_dir, model, optimizer, scaler, scheduler, device):
     path = latest_checkpoint_path(run_dir)
     if not path.exists():
@@ -411,6 +494,7 @@ def train_target(config, target_path, seed):
         return run_dir
 
     metrics_path = run_dir / "metrics.jsonl"
+    eval_history = load_eval_history(metrics_path)
     append_jsonl(
         metrics_path,
         {
@@ -424,7 +508,9 @@ def train_target(config, target_path, seed):
     )
 
     start_time = time.time()
+    final_step = start_step
     for step in range(start_step + 1, config["train"]["steps"] + 1):
+        final_step = step
         progress = (step - 1) / max(config["train"]["steps"] - 1, 1)
         rollout_min, rollout_max = rollout_bounds(config, progress)
         rollout = int(torch.randint(rollout_min, rollout_max + 1, (1,), device=device).item())
@@ -515,6 +601,14 @@ def train_target(config, target_path, seed):
                 writer.add_scalar("eval/score", summary["score"], step)
                 writer.add_scalar("eval/recovery_total", summary["recovery"]["total"], step)
                 writer.add_scalar("eval/tail_total", summary["points"][-1]["total"], step)
+            eval_history.append(
+                {
+                    "step": int(step),
+                    "score": float(summary["score"]),
+                    "recovery_total": float(summary["recovery"]["total"]),
+                    "tail_total": float(summary["points"][-1]["total"]),
+                }
+            )
             print(
                 f"{target_path.stem} seed {seed} eval "
                 f"step {step:5d} score {summary['score']:.5f} "
@@ -524,6 +618,28 @@ def train_target(config, target_path, seed):
                 best_score = summary["score"]
                 save_best_checkpoint(run_dir, model, step, best_score, summary, resolved)
 
+            stop_blob = maybe_stop_early(eval_history, config)
+            if stop_blob is not None:
+                save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, step, best_score, resolved)
+                append_jsonl(
+                    metrics_path,
+                    {
+                        "kind": "run_stop",
+                        "step": step,
+                        "reason": stop_blob["kind"],
+                        "best_step": stop_blob["best_step"],
+                        "best_score": stop_blob["best_score"],
+                        "latest_score": stop_blob["latest_score"],
+                        "time": now_stamp(),
+                    },
+                )
+                print(
+                    f"{target_path.stem} seed {seed} stopped early at step {step} "
+                    f"because it {stop_blob['kind']} "
+                    f"(best {stop_blob['best_score']:.5f} at {stop_blob['best_step']})"
+                )
+                break
+
         if step % config["train"]["save_every"] == 0 or step == config["train"]["steps"]:
             save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, step, best_score, resolved)
 
@@ -531,7 +647,7 @@ def train_target(config, target_path, seed):
         metrics_path,
         {
             "kind": "run_end",
-            "step": config["train"]["steps"],
+            "step": final_step,
             "best_score": best_score,
             "time": now_stamp(),
         },
