@@ -550,7 +550,7 @@ def resolve_config(path, overrides=None):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/rtx5090_base.toml")
+    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
     parser.add_argument("--target", required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int)

@@ -32,10 +32,10 @@ if not torch.cuda.is_available():
     raise SystemExit("cuda is not available. pick a cuda-enabled vast template before training.")
 
 if torch_version < (2, 7):
-    raise SystemExit("torch is too old for the intended 5090 setup. use torch 2.7 or newer.")
+    raise SystemExit("torch is too old for this training stack. use torch 2.7 or newer.")
 
 if cuda_version < (12, 8):
-    raise SystemExit("cuda build is too old for the intended 5090 setup. use a cuda 12.8+ image.")
+    raise SystemExit("cuda build is too old for this training stack. use a cuda 12.8+ image.")
 PY
 
 mkdir -p runs_v2 bundles_v2

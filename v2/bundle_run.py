@@ -7,7 +7,7 @@ from v2.common import load_config, now_stamp
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/rtx5090_base.toml")
+    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
     parser.add_argument("--run-dir")
     parser.add_argument("--group-dir")
     parser.add_argument("--out")

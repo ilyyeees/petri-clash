@@ -17,7 +17,7 @@ def load_checkpoint(path, config, device):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/rtx5090_base.toml")
+    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
     parser.add_argument("--checkpoint")
     parser.add_argument("--run-dir")
     parser.add_argument("--target")

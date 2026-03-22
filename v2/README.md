@@ -8,11 +8,11 @@ the main idea is simple:
 - do heavy training and evaluation through `v2/`
 - make every run resumable
 - make every run exportable as a small bundle
-- optimize for a box like an rtx 5090 instead of a laptop cpu
+- optimize for one solid gpu instead of a laptop cpu
 
 torch is intentionally not pinned in `v2/requirements.txt`.
 
-the expectation is that you use a vast pytorch image or the local conda env from the repo root. the bootstrap script checks that torch is already there and that the build is new enough for a 5090.
+the expectation is that you use a vast pytorch image or the local conda env from the repo root. the bootstrap script checks that torch is already there and that the build is new enough for a modern blackwell or ada box.
 
 ## what is here
 
@@ -21,7 +21,7 @@ the expectation is that you use a vast pytorch image or the local conda env from
 - `eval_v2.py` scores a checkpoint and saves a preview image
 - `preflight.py` runs a tiny smoke test on the current machine
 - `bundle_run.py` packs the useful outputs into a small tarball
-- `configs/rtx5090_base.toml` is the default all-target config
+- `configs/single_gpu_base.toml` is the default all-target config
 - `scripts/` contains the shell wrappers for remote use
 - tensorboard logs land inside each run dir
 
@@ -47,7 +47,7 @@ on a fresh vast machine:
 ```bash
 git clone git@github.com:ilyyeees/petri-clash.git
 cd petri-clash
-git checkout v2-rtx5090-training
+git checkout v2-single-gpu-training
 bash v2/scripts/bootstrap_vast.sh
 bash v2/scripts/preflight.sh
 bash v2/scripts/launch_remote.sh
@@ -74,7 +74,7 @@ bash v2/scripts/bundle_group.sh
 if you launch a run with a custom group name, pass the matching group dir when you bundle:
 
 ```bash
-bash v2/scripts/bundle_group.sh v2/configs/rtx5090_base.toml --group-dir runs_v2/my_custom_group
+bash v2/scripts/bundle_group.sh v2/configs/single_gpu_base.toml --group-dir runs_v2/my_custom_group
 ```
 
 ## results layout
@@ -97,9 +97,10 @@ inside each run you will get:
 
 the archive script only grabs the important pieces so retrieval stays fast.
 
-## notes for a 5090 box
+## notes for the recommended setup
 
 - use a pytorch image that already has a modern cuda build
 - this stack expects cuda for amp and compile to matter
-- the config is tuned for a big single gpu, not for cpu fallback
+- the config is tuned for a 24gb-class single gpu, not for cpu fallback
+- the recommended pick for one training process is an rtx 3090
 - if you want bigger arenas, retrain at that arena size instead of reusing 48x48 weights

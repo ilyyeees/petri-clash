@@ -8,7 +8,7 @@ from v2.train_v2 import resolve_config, train_target
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/rtx5090_base.toml")
+    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
     parser.add_argument("--targets", nargs="*")
     parser.add_argument("--seeds", nargs="*", type=int)
     parser.add_argument("--device")

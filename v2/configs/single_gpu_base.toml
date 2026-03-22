@@ -1,5 +1,5 @@
 [run]
-group_name = "rtx5090_all_targets"
+group_name = "single_gpu_all_targets"
 output_root = "runs_v2"
 target_glob = "targets/*.png"
 seeds = [0, 1, 2]
@@ -22,7 +22,7 @@ target_size = 40
 [train]
 steps = 12000
 pool_size = 2048
-batch_size = 64
+batch_size = 48
 lr = 0.0015
 weight_decay = 0.0
 grad_clip = 1.0

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-CONFIG="${1:-v2/configs/rtx5090_base.toml}"
+CONFIG="${1:-v2/configs/single_gpu_base.toml}"
 TARGET="${2:-}"
 
 if [[ -n "$TARGET" ]]; then
