@@ -23,12 +23,13 @@ def load_target(path, target_size=40, grid_size=48, device="cpu"):
     return tensor.to(device)
 
 
-def save_checkpoint(model, out_path, args, target_path):
+def save_checkpoint(model, out_path, args, target_path, train_steps):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     blob = {
         "state_dict": model.state_dict(),
         "target_name": target_path.stem,
         "target_path": str(target_path),
+        "train_steps": train_steps,
         "grid_size": args.grid_size,
         "target_size": args.target_size,
         "channels": model.channels,
@@ -135,7 +136,7 @@ def train_target(
             )
 
         if step % save_every == 0 or step == steps:
-            save_checkpoint(model, out_path, args, target_path)
+            save_checkpoint(model, out_path, args, target_path, step)
 
     print(f"saved {out_path}")
     return out_path
@@ -157,11 +158,6 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
     args = parser.parse_args()
-
-    if args.seed:
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
 
     train_target(
         args.target,

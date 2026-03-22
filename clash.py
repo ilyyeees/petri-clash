@@ -16,8 +16,7 @@ def list_targets():
     return sorted(Path("targets").glob("*.png"))
 
 
-def load_model(weight_path, device):
-    blob = torch.load(weight_path, map_location=device)
+def load_model_blob(blob, device):
     model = NCA(
         channels=blob.get("channels", 16),
         hidden_size=blob.get("hidden_size", 128),
@@ -28,11 +27,23 @@ def load_model(weight_path, device):
     return model
 
 
+def load_model(weight_path, device):
+    blob = torch.load(weight_path, map_location=device)
+    return load_model_blob(blob, device)
+
+
 def ensure_model(target_path, device, bootstrap_steps):
     weight_path = Path("weights") / f"{target_path.stem}.pt"
     if weight_path.exists():
-        print(f"loaded {weight_path.name}")
-        return load_model(weight_path, device)
+        blob = torch.load(weight_path, map_location="cpu")
+        trained_steps = int(blob.get("train_steps", 0) or 0)
+        if trained_steps >= bootstrap_steps or bootstrap_steps <= 0:
+            print(f"loaded {weight_path.name} ({trained_steps} steps)")
+            return load_model_blob(blob, device)
+        print(
+            f"refreshing {weight_path.name} because it only has "
+            f"{trained_steps} steps"
+        )
 
     if bootstrap_steps > 0:
         print(f"bootstrapping {target_path.name} for {bootstrap_steps} steps")
@@ -150,7 +161,7 @@ def main():
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--left", type=int, default=1)
     parser.add_argument("--right", type=int, default=2)
-    parser.add_argument("--bootstrap-steps", type=int, default=150)
+    parser.add_argument("--bootstrap-steps", type=int, default=500)
     parser.add_argument("--device", default=pick_device())
     parser.add_argument("--headless-frames", type=int, default=0)
     args = parser.parse_args()
