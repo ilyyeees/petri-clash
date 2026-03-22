@@ -16,6 +16,11 @@ from trainer.train_v2 import resolve_config
 
 V2_ROOT = Path(__file__).resolve().parent
 DEFAULT_TRAIN_CONFIG = V2_ROOT / "trainer" / "configs" / "single_gpu_base.toml"
+DEFAULT_PRESSURE_GAIN = 0.28
+DEFAULT_CONTROL_DECAY = 0.97
+DEFAULT_CAPTURE_THRESHOLD = 0.55
+DEFAULT_RELEASE_THRESHOLD = 0.12
+DEFAULT_TIE_MARGIN = 0.01
 
 
 def list_targets():
@@ -253,10 +258,13 @@ def reset_world(size, device, left_bundle, right_bundle, left_pos=None, right_po
     owner = torch.zeros(1, 1, size, size, dtype=torch.long, device=device)
     owner[0, 0, ay, ax] = 1
     owner[0, 0, by, bx] = 2
-    return state_a, state_b, owner
+    control = torch.zeros(1, 1, size, size, dtype=torch.float32, device=device)
+    control[0, 0, ay, ax] = 1.0
+    control[0, 0, by, bx] = -1.0
+    return state_a, state_b, owner, control
 
 
-def crater(state_a, state_b, owner, gx, gy, radius):
+def crater(state_a, state_b, owner, control, gx, gy, radius):
     h, w = state_a.shape[-2:]
     yy = torch.arange(h, device=state_a.device).view(1, 1, h, 1)
     xx = torch.arange(w, device=state_a.device).view(1, 1, 1, w)
@@ -265,10 +273,31 @@ def crater(state_a, state_b, owner, gx, gy, radius):
     state_a = torch.where(mask.expand_as(state_a), torch.zeros_like(state_a), state_a)
     state_b = torch.where(mask.expand_as(state_b), torch.zeros_like(state_b), state_b)
     owner = torch.where(mask, torch.zeros_like(owner), owner)
-    return state_a, state_b, owner
+    control = torch.where(mask, torch.zeros_like(control), control)
+    return state_a, state_b, owner, control
 
 
-def clash_step(state_a, state_b, owner, model_a, model_b):
+def momentum_owner(control, owner, capture_threshold, release_threshold):
+    next_owner = owner.clone()
+    next_owner = torch.where(control >= capture_threshold, torch.ones_like(next_owner), next_owner)
+    next_owner = torch.where(control <= -capture_threshold, torch.full_like(next_owner, 2), next_owner)
+    next_owner = torch.where(control.abs() <= release_threshold, torch.zeros_like(next_owner), next_owner)
+    return next_owner
+
+
+def clash_step(
+    state_a,
+    state_b,
+    owner,
+    control,
+    model_a,
+    model_b,
+    pressure_gain=DEFAULT_PRESSURE_GAIN,
+    control_decay=DEFAULT_CONTROL_DECAY,
+    capture_threshold=DEFAULT_CAPTURE_THRESHOLD,
+    release_threshold=DEFAULT_RELEASE_THRESHOLD,
+    tie_margin=DEFAULT_TIE_MARGIN,
+):
     with torch.inference_mode():
         proposed_a = model_a(state_a, steps=1)
         proposed_b = model_b(state_b, steps=1)
@@ -285,17 +314,17 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
         claim_a = (alpha_a > 0.05) & (owned_a | near_a)
         claim_b = (alpha_b > 0.05) & (owned_b | near_b)
 
-        next_owner = owner.clone()
-        only_a = claim_a & ~claim_b
-        only_b = claim_b & ~claim_a
-        both = claim_a & claim_b
+        strength_a = torch.where(claim_a, alpha_a, torch.zeros_like(alpha_a))
+        strength_b = torch.where(claim_b, alpha_b, torch.zeros_like(alpha_b))
+        pressure = strength_a - strength_b
 
-        next_owner = torch.where(only_a, torch.ones_like(next_owner), next_owner)
-        next_owner = torch.where(only_b, torch.full_like(next_owner, 2), next_owner)
+        # exact or near ties should not quietly favor the left side
+        pressure = torch.where(pressure.abs() >= tie_margin, pressure, torch.zeros_like(pressure))
 
-        a_wins = alpha_a >= alpha_b
-        winner_owner = torch.where(a_wins, torch.ones_like(owner), torch.full_like(owner, 2))
-        next_owner = torch.where(both, winner_owner, next_owner)
+        # control carries territorial momentum, and decay lets abandoned cells drift back to neutral
+        next_control = control * control_decay + pressure * pressure_gain
+        next_control = next_control.clamp(-1.0, 1.0)
+        next_owner = momentum_owner(next_control, owner, capture_threshold, release_threshold)
 
         next_state_a = torch.where(
             (next_owner == 1).expand_as(proposed_a),
@@ -308,26 +337,20 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
             torch.zeros_like(proposed_b),
         )
 
-        # tiny sparks are what turn into the ugly drift, so cut them off before they matter
-        support_a = F.avg_pool2d((next_owner == 1).float(), 3, stride=1, padding=1)
-        support_b = F.avg_pool2d((next_owner == 2).float(), 3, stride=1, padding=1)
-        stable_a = (next_owner == 1) & (support_a >= (2.0 / 9.0))
-        stable_b = (next_owner == 2) & (support_b >= (2.0 / 9.0))
-
-        next_state_a = torch.where(stable_a.expand_as(next_state_a), next_state_a, torch.zeros_like(next_state_a))
-        next_state_b = torch.where(stable_b.expand_as(next_state_b), next_state_b, torch.zeros_like(next_state_b))
-        next_owner = torch.where((next_owner == 1) & ~stable_a, torch.zeros_like(next_owner), next_owner)
-        next_owner = torch.where((next_owner == 2) & ~stable_b, torch.zeros_like(next_owner), next_owner)
-
         dead_a = F.max_pool2d(next_state_a[:, 3:4], 3, stride=1, padding=1) <= 0.1
         dead_b = F.max_pool2d(next_state_b[:, 3:4], 3, stride=1, padding=1) <= 0.1
+        owner_before_dead_prune = next_owner.clone()
 
         next_state_a = torch.where(dead_a.expand_as(next_state_a), torch.zeros_like(next_state_a), next_state_a)
         next_state_b = torch.where(dead_b.expand_as(next_state_b), torch.zeros_like(next_state_b), next_state_b)
         next_owner = torch.where(dead_a & (next_owner == 1), torch.zeros_like(next_owner), next_owner)
         next_owner = torch.where(dead_b & (next_owner == 2), torch.zeros_like(next_owner), next_owner)
+        lost_life = (owner_before_dead_prune != 0) & (next_owner == 0)
+        next_control = torch.where(lost_life, torch.zeros_like(next_control), next_control)
+        next_control = torch.where(next_owner == 1, next_control.clamp(min=0.0), next_control)
+        next_control = torch.where(next_owner == 2, next_control.clamp(max=0.0), next_control)
 
-    return next_state_a, next_state_b, next_owner
+    return next_state_a, next_state_b, next_owner, next_control
 
 
 def compose_rgba(state_a, state_b, owner):
@@ -364,10 +387,17 @@ def main():
     parser.add_argument("--right-seed", type=int)
     parser.add_argument("--left-pos", type=parse_grid_pos)
     parser.add_argument("--right-pos", type=parse_grid_pos)
+    parser.add_argument("--pressure-gain", type=float, default=DEFAULT_PRESSURE_GAIN)
+    parser.add_argument("--control-decay", type=float, default=DEFAULT_CONTROL_DECAY)
+    parser.add_argument("--capture-threshold", type=float, default=DEFAULT_CAPTURE_THRESHOLD)
+    parser.add_argument("--release-threshold", type=float, default=DEFAULT_RELEASE_THRESHOLD)
+    parser.add_argument("--tie-margin", type=float, default=DEFAULT_TIE_MARGIN)
     parser.add_argument("--bootstrap-steps", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
     parser.add_argument("--headless-frames", type=int, default=0)
     args = parser.parse_args()
+    if args.release_threshold >= args.capture_threshold:
+        raise SystemExit("--release-threshold must be smaller than --capture-threshold")
 
     targets = list_targets()
     if not targets:
@@ -397,7 +427,7 @@ def main():
     paused = False
     frames = 0
     grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-    state_a, state_b, owner = reset_world(
+    state_a, state_b, owner, control = reset_world(
         grid_size,
         args.device,
         left_bundle,
@@ -429,7 +459,7 @@ def main():
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
-                    state_a, state_b, owner = reset_world(
+                    state_a, state_b, owner, control = reset_world(
                         grid_size,
                         args.device,
                         left_bundle,
@@ -461,7 +491,7 @@ def main():
                         print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
 
                     grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-                    state_a, state_b, owner = reset_world(
+                    state_a, state_b, owner, control = reset_world(
                         grid_size,
                         args.device,
                         left_bundle,
@@ -473,17 +503,30 @@ def main():
                 width, height = window.get_size()
                 gx = int(event.pos[0] * grid_size / max(width, 1))
                 gy = int(event.pos[1] * grid_size / max(height, 1))
-                state_a, state_b, owner = crater(
+                state_a, state_b, owner, control = crater(
                     state_a,
                     state_b,
                     owner,
+                    control,
                     gx,
                     gy,
                     radius=max(2, grid_size // 12),
                 )
 
         if not paused:
-            state_a, state_b, owner = clash_step(state_a, state_b, owner, left_model, right_model)
+            state_a, state_b, owner, control = clash_step(
+                state_a,
+                state_b,
+                owner,
+                control,
+                left_model,
+                right_model,
+                pressure_gain=args.pressure_gain,
+                control_decay=args.control_decay,
+                capture_threshold=args.capture_threshold,
+                release_threshold=args.release_threshold,
+                tie_margin=args.tie_margin,
+            )
 
         surface = render_surface(state_a, state_b, owner)
         scaled = pygame.transform.scale(surface, window.get_size())
