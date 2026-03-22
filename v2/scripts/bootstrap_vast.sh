@@ -4,21 +4,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-python3 -m pip install --upgrade pip setuptools wheel
+python3 -m venv .venv
+PYTHON="$ROOT/.venv/bin/python"
+PIP="$ROOT/.venv/bin/pip"
 TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu126}"
 
-if ! python3 - <<'PY'
+"$PIP" install --upgrade pip setuptools wheel
+
+if ! "$PYTHON" - <<'PY'
 import importlib.util
 import sys
 sys.exit(0 if importlib.util.find_spec("torch") else 1)
 PY
 then
-  python3 -m pip install torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+  "$PIP" install torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
 fi
 
-python3 -m pip install -r v2/requirements.txt
+"$PIP" install -r v2/requirements.txt
 
-python3 - <<'PY'
+"$PYTHON" - <<'PY'
 try:
     import torch
 except ModuleNotFoundError as exc:

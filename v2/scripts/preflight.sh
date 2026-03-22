@@ -6,9 +6,13 @@ cd "$ROOT"
 
 CONFIG="${1:-v2/configs/single_gpu_base.toml}"
 TARGET="${2:-}"
+PYTHON="$ROOT/.venv/bin/python"
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON=python3
+fi
 
 if [[ -n "$TARGET" ]]; then
-  PYTHONUNBUFFERED=1 python3 -m v2.preflight --config "$CONFIG" --target "$TARGET"
+  PYTHONUNBUFFERED=1 "$PYTHON" -m v2.preflight --config "$CONFIG" --target "$TARGET"
 else
-  PYTHONUNBUFFERED=1 python3 -m v2.preflight --config "$CONFIG"
+  PYTHONUNBUFFERED=1 "$PYTHON" -m v2.preflight --config "$CONFIG"
 fi
