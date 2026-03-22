@@ -196,6 +196,14 @@ def active_grid_size(requested_size, left_bundle, right_bundle):
     return max(int(left_bundle["grid_size"]), int(right_bundle["grid_size"]))
 
 
+def parse_grid_pos(text):
+    try:
+        x_text, y_text = text.split(",", 1)
+        return int(x_text.strip()), int(y_text.strip())
+    except Exception as exc:
+        raise argparse.ArgumentTypeError("expected x,y") from exc
+
+
 def random_seed_positions(size):
     span = max(2, size // 10)
     y = clamp(size // 2 + random.randint(-span, span), 2, size - 3)
@@ -208,8 +216,19 @@ def random_seed_positions(size):
     return ax, y, bx, y
 
 
-def reset_world(size, device, left_bundle, right_bundle):
+def clamp_seed_pos(pos, size):
+    if pos is None:
+        return None
+    x, y = pos
+    return clamp(int(x), 2, size - 3), clamp(int(y), 2, size - 3)
+
+
+def reset_world(size, device, left_bundle, right_bundle, left_pos=None, right_pos=None):
     ax, ay, bx, by = random_seed_positions(size)
+    if left_pos is not None:
+        ax, ay = clamp_seed_pos(left_pos, size)
+    if right_pos is not None:
+        bx, by = clamp_seed_pos(right_pos, size)
     state_a = make_seed(
         1,
         channels=left_bundle["channels"],
@@ -343,6 +362,8 @@ def main():
     parser.add_argument("--right", type=int, default=2)
     parser.add_argument("--left-seed", type=int)
     parser.add_argument("--right-seed", type=int)
+    parser.add_argument("--left-pos", type=parse_grid_pos)
+    parser.add_argument("--right-pos", type=parse_grid_pos)
     parser.add_argument("--bootstrap-steps", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
     parser.add_argument("--headless-frames", type=int, default=0)
@@ -376,7 +397,14 @@ def main():
     paused = False
     frames = 0
     grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
+    state_a, state_b, owner = reset_world(
+        grid_size,
+        args.device,
+        left_bundle,
+        right_bundle,
+        left_pos=args.left_pos,
+        right_pos=args.right_pos,
+    )
 
     digit_keys = {
         pygame.K_1: 0,
@@ -401,7 +429,14 @@ def main():
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
-                    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
+                    state_a, state_b, owner = reset_world(
+                        grid_size,
+                        args.device,
+                        left_bundle,
+                        right_bundle,
+                        left_pos=args.left_pos,
+                        right_pos=args.right_pos,
+                    )
                 elif event.key in digit_keys and digit_keys[event.key] < len(targets):
                     target_id = digit_keys[event.key]
                     if event.mod & pygame.KMOD_SHIFT:
@@ -426,7 +461,14 @@ def main():
                         print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
 
                     grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-                    state_a, state_b, owner = reset_world(grid_size, args.device, left_bundle, right_bundle)
+                    state_a, state_b, owner = reset_world(
+                        grid_size,
+                        args.device,
+                        left_bundle,
+                        right_bundle,
+                        left_pos=args.left_pos,
+                        right_pos=args.right_pos,
+                    )
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 width, height = window.get_size()
                 gx = int(event.pos[0] * grid_size / max(width, 1))
