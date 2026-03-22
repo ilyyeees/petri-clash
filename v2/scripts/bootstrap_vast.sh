@@ -5,6 +5,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 python3 -m pip install --upgrade pip setuptools wheel
+TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu126}"
+
+if ! python3 - <<'PY'
+import importlib.util
+import sys
+sys.exit(0 if importlib.util.find_spec("torch") else 1)
+PY
+then
+  python3 -m pip install torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+fi
+
 python3 -m pip install -r v2/requirements.txt
 
 python3 - <<'PY'
@@ -34,8 +45,8 @@ if not torch.cuda.is_available():
 if torch_version < (2, 7):
     raise SystemExit("torch is too old for this training stack. use torch 2.7 or newer.")
 
-if cuda_version < (12, 8):
-    raise SystemExit("cuda build is too old for this training stack. use a cuda 12.8+ image.")
+if cuda_version < (12, 6):
+    raise SystemExit("cuda build is too old for this training stack. use a cuda 12.6+ image.")
 PY
 
 mkdir -p runs_v2 bundles_v2
