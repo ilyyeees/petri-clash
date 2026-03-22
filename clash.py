@@ -140,6 +140,17 @@ def clash_step(state_a, state_b, owner, model_a, model_b):
         next_state_a = torch.where((next_owner == 1).expand_as(proposed_a), proposed_a, torch.zeros_like(proposed_a))
         next_state_b = torch.where((next_owner == 2).expand_as(proposed_b), proposed_b, torch.zeros_like(proposed_b))
 
+        # tiny sparks are what turn into the ugly late-stage creep, so kill them early
+        support_a = F.avg_pool2d((next_owner == 1).float(), 3, stride=1, padding=1)
+        support_b = F.avg_pool2d((next_owner == 2).float(), 3, stride=1, padding=1)
+        stable_a = (next_owner == 1) & (support_a >= (2.0 / 9.0))
+        stable_b = (next_owner == 2) & (support_b >= (2.0 / 9.0))
+
+        next_state_a = torch.where(stable_a.expand_as(next_state_a), next_state_a, torch.zeros_like(next_state_a))
+        next_state_b = torch.where(stable_b.expand_as(next_state_b), next_state_b, torch.zeros_like(next_state_b))
+        next_owner = torch.where((next_owner == 1) & ~stable_a, torch.zeros_like(next_owner), next_owner)
+        next_owner = torch.where((next_owner == 2) & ~stable_b, torch.zeros_like(next_owner), next_owner)
+
         dead_a = F.max_pool2d(next_state_a[:, 3:4], 3, stride=1, padding=1) <= 0.1
         dead_b = F.max_pool2d(next_state_b[:, 3:4], 3, stride=1, padding=1) <= 0.1
 
@@ -173,7 +184,7 @@ def select_target(index, targets):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--grid-size", type=int, default=64)
+    parser.add_argument("--grid-size", type=int, default=48)
     parser.add_argument("--window-size", type=int, default=960)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--left", type=int, default=1)
