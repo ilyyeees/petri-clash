@@ -364,9 +364,16 @@ def compose_rgba(state_a, state_b, owner):
     )
 
 
-def render_surface(state_a, state_b, owner):
+def render_surface(state_a, state_b, owner, team_colors=False):
     rgba = compose_rgba(state_a, state_b, owner)[0].detach().cpu().clamp(0.0, 1.0)
-    rgb = rgba[:3] * rgba[3:4]
+    if team_colors:
+        alpha = rgba[3:4]
+        owner_mask = owner[0, 0].detach().cpu()
+        rgb = torch.zeros_like(rgba[:3])
+        rgb[0] = torch.where(owner_mask == 1, alpha[0], torch.zeros_like(alpha[0]))
+        rgb[2] = torch.where(owner_mask == 2, alpha[0], torch.zeros_like(alpha[0]))
+    else:
+        rgb = rgba[:3] * rgba[3:4]
     image = (rgb.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
     return pygame.surfarray.make_surface(image.swapaxes(0, 1))
 
@@ -392,6 +399,7 @@ def main():
     parser.add_argument("--capture-threshold", type=float, default=DEFAULT_CAPTURE_THRESHOLD)
     parser.add_argument("--release-threshold", type=float, default=DEFAULT_RELEASE_THRESHOLD)
     parser.add_argument("--tie-margin", type=float, default=DEFAULT_TIE_MARGIN)
+    parser.add_argument("--team-colors", action="store_true")
     parser.add_argument("--bootstrap-steps", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
     parser.add_argument("--headless-frames", type=int, default=0)
@@ -528,7 +536,7 @@ def main():
                 tie_margin=args.tie_margin,
             )
 
-        surface = render_surface(state_a, state_b, owner)
+        surface = render_surface(state_a, state_b, owner, team_colors=args.team_colors)
         scaled = pygame.transform.scale(surface, window.get_size())
         window.fill((0, 0, 0))
         window.blit(scaled, (0, 0))
