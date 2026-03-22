@@ -29,6 +29,42 @@ def load_best_score(run_dir):
     return float(blob["score"]), blob
 
 
+def load_run_stop(run_dir):
+    path = Path(run_dir) / "metrics.jsonl"
+    if not path.exists():
+        return None
+
+    latest = None
+    for line in path.open():
+        blob = json.loads(line)
+        if blob.get("kind") == "run_stop":
+            latest = blob
+    return latest
+
+
+def seed_order(config, args):
+    if args.seeds:
+        return [int(seed) for seed in args.seeds]
+
+    primary = [int(seed) for seed in config["run"].get("seeds", [0])]
+    fallback = [int(seed) for seed in config["run"].get("fallback_seeds", [])]
+    ordered = []
+    for seed in primary + fallback:
+        if seed not in ordered:
+            ordered.append(seed)
+    return ordered
+
+
+def run_status(run_dir):
+    best = load_best_score(run_dir)
+    stop = load_run_stop(run_dir)
+    return {
+        "best": best,
+        "stop": stop,
+        "collapsed": stop is not None and stop.get("reason") == "collapsed",
+    }
+
+
 def write_group_summary(config, target_paths, seeds):
     group_root = Path(config["run"]["output_root"]) / config["run"]["group_name"]
     summary = {"group": config["run"]["group_name"], "targets": {}}
@@ -81,16 +117,32 @@ def main():
     if args.targets:
         chosen = set(args.targets)
         target_paths = [path for path in target_paths if path.stem in chosen or path.name in chosen]
-    seeds = args.seeds or [int(seed) for seed in config["run"]["seeds"]]
+    seeds = seed_order(config, args)
 
     print(f"targets: {[path.stem for path in target_paths]}")
-    print(f"seeds: {seeds}")
+    print(f"seed order: {seeds}")
 
     for target_path in target_paths:
+        accepted_seed = None
         for seed in seeds:
             print(f"training {target_path.stem} seed {seed}")
-            train_target(config, target_path, seed)
+            run_dir = train_target(config, target_path, seed)
             write_group_summary(config, target_paths, seeds)
+            status = run_status(run_dir)
+
+            if status["collapsed"]:
+                print(f"{target_path.stem} seed {seed} collapsed, trying the next seed")
+                continue
+
+            if status["best"] is not None:
+                print(f"{target_path.stem} accepted seed {seed} with score {status['best'][0]:.5f}")
+                accepted_seed = seed
+                break
+
+            print(f"{target_path.stem} seed {seed} produced no best checkpoint, trying the next seed")
+
+        if accepted_seed is None:
+            print(f"{target_path.stem} finished without a valid seed")
 
     print("done")
 

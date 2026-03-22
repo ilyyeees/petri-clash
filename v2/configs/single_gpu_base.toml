@@ -3,6 +3,7 @@ group_name = "single_gpu_all_targets"
 output_root = "runs_v2"
 target_glob = "targets/*.png"
 seeds = [0]
+fallback_seeds = [1, 2]
 
 [runtime]
 device = "auto"
