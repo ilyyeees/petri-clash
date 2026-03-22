@@ -4,13 +4,13 @@ this is the remote-first training stack for long-horizon nca work.
 
 the main idea is simple:
 
-- keep the playable baseline in the root scripts
-- do heavy training and evaluation through `v2/`
+- keep the playable baseline in the outer `v2/` folder
+- do heavy training and evaluation through `trainer/`
 - make every run resumable
 - make every run exportable as a small bundle
 - optimize for one solid gpu instead of a laptop cpu
 
-torch is intentionally not pinned in `v2/requirements.txt`.
+torch is intentionally not pinned in `trainer/requirements.txt`.
 
 the expectation is that you use a vast pytorch image or the local conda env from the repo root. the bootstrap script checks that torch is already there and that the build is new enough for a modern blackwell or ada box.
 
@@ -46,17 +46,16 @@ on a fresh vast machine:
 
 ```bash
 git clone git@github.com:ilyyeees/petri-clash.git
-cd petri-clash
-git checkout v2-single-gpu-training
-bash v2/scripts/bootstrap_vast.sh
-bash v2/scripts/preflight.sh
-bash v2/scripts/launch_remote.sh
+cd petri-clash/v2
+bash trainer/scripts/bootstrap_vast.sh
+bash trainer/scripts/preflight.sh
+bash trainer/scripts/launch_remote.sh
 ```
 
 to monitor:
 
 ```bash
-bash v2/scripts/status.sh
+bash trainer/scripts/status.sh
 ```
 
 to watch tensorboard on the machine:
@@ -68,13 +67,13 @@ tensorboard --logdir runs_v2
 to make a compact archive of the best outputs:
 
 ```bash
-bash v2/scripts/bundle_group.sh
+bash trainer/scripts/bundle_group.sh
 ```
 
 if you launch a run with a custom group name, pass the matching group dir when you bundle:
 
 ```bash
-bash v2/scripts/bundle_group.sh v2/configs/single_gpu_base.toml --group-dir runs_v2/my_custom_group
+bash trainer/scripts/bundle_group.sh trainer/configs/single_gpu_base.toml --group-dir runs_v2/my_custom_group
 ```
 
 ## results layout

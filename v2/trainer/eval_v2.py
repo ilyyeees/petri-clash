@@ -4,8 +4,8 @@ from pathlib import Path
 
 import torch
 
-from v2.common import model_from_config, pick_device, save_json, setup_torch, target_tensor_from_config
-from v2.train_v2 import evaluate_model, resolve_config
+from trainer.common import model_from_config, pick_device, save_json, setup_torch, target_tensor_from_config
+from trainer.train_v2 import evaluate_model, resolve_config
 
 
 def load_checkpoint(path, config, device):
@@ -17,7 +17,7 @@ def load_checkpoint(path, config, device):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
+    parser.add_argument("--config", default="trainer/configs/single_gpu_base.toml")
     parser.add_argument("--checkpoint")
     parser.add_argument("--run-dir")
     parser.add_argument("--target")

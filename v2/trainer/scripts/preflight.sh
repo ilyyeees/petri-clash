@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-CONFIG="${1:-v2/configs/single_gpu_base.toml}"
+CONFIG="${1:-trainer/configs/single_gpu_base.toml}"
 TARGET="${2:-}"
 PYTHON="$ROOT/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
@@ -12,7 +12,7 @@ if [[ ! -x "$PYTHON" ]]; then
 fi
 
 if [[ -n "$TARGET" ]]; then
-  PYTHONUNBUFFERED=1 "$PYTHON" -m v2.preflight --config "$CONFIG" --target "$TARGET"
+  PYTHONUNBUFFERED=1 "$PYTHON" -m trainer.preflight --config "$CONFIG" --target "$TARGET"
 else
-  PYTHONUNBUFFERED=1 "$PYTHON" -m v2.preflight --config "$CONFIG"
+  PYTHONUNBUFFERED=1 "$PYTHON" -m trainer.preflight --config "$CONFIG"
 fi

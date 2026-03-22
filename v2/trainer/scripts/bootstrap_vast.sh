@@ -20,7 +20,7 @@ then
   "$PIP" install torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
 fi
 
-"$PIP" install -r v2/requirements.txt
+"$PIP" install -r trainer/requirements.txt
 
 "$PYTHON" - <<'PY'
 try:

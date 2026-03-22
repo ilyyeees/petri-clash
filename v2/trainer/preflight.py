@@ -3,13 +3,13 @@ from pathlib import Path
 
 import torch
 
-from v2.common import load_config, merge_dict, pick_device, save_json
-from v2.train_v2 import train_target
+from trainer.common import load_config, merge_dict, pick_device, save_json
+from trainer.train_v2 import train_target
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
+    parser.add_argument("--config", default="trainer/configs/single_gpu_base.toml")
     parser.add_argument("--target")
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()

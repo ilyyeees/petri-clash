@@ -2,13 +2,13 @@ import argparse
 import json
 from pathlib import Path
 
-from v2.common import list_target_paths, run_dir_for, save_json
-from v2.train_v2 import resolve_config, train_target
+from trainer.common import list_target_paths, run_dir_for, save_json
+from trainer.train_v2 import resolve_config, train_target
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="v2/configs/single_gpu_base.toml")
+    parser.add_argument("--config", default="trainer/configs/single_gpu_base.toml")
     parser.add_argument("--targets", nargs="*")
     parser.add_argument("--seeds", nargs="*", type=int)
     parser.add_argument("--device")
