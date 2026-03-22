@@ -84,33 +84,34 @@ def random_seed_positions(size):
 
 def reset_world(size, device):
     ax, ay, bx, by = random_seed_positions(size)
-    state = torch.zeros(1, 16, size, size, device=device)
+    state_a = torch.zeros(1, 16, size, size, device=device)
+    state_b = torch.zeros(1, 16, size, size, device=device)
     owner = torch.zeros(1, 1, size, size, dtype=torch.long, device=device)
 
-    seed_a = make_seed(1, height=size, width=size, xs=[ax], ys=[ay], device=device)
-    seed_b = make_seed(1, height=size, width=size, xs=[bx], ys=[by], device=device)
-    state = torch.maximum(seed_a, seed_b)
+    state_a = make_seed(1, height=size, width=size, xs=[ax], ys=[ay], device=device)
+    state_b = make_seed(1, height=size, width=size, xs=[bx], ys=[by], device=device)
 
     owner[0, 0, ay, ax] = 1
     owner[0, 0, by, bx] = 2
-    return state, owner
+    return state_a, state_b, owner
 
 
-def crater(state, owner, gx, gy, radius):
-    h, w = state.shape[-2:]
-    yy = torch.arange(h, device=state.device).view(1, 1, h, 1)
-    xx = torch.arange(w, device=state.device).view(1, 1, 1, w)
+def crater(state_a, state_b, owner, gx, gy, radius):
+    h, w = state_a.shape[-2:]
+    yy = torch.arange(h, device=state_a.device).view(1, 1, h, 1)
+    xx = torch.arange(w, device=state_a.device).view(1, 1, 1, w)
     mask = ((xx - gx).pow(2) + (yy - gy).pow(2)) <= radius * radius
 
-    state = torch.where(mask.expand_as(state), torch.zeros_like(state), state)
+    state_a = torch.where(mask.expand_as(state_a), torch.zeros_like(state_a), state_a)
+    state_b = torch.where(mask.expand_as(state_b), torch.zeros_like(state_b), state_b)
     owner = torch.where(mask, torch.zeros_like(owner), owner)
-    return state, owner
+    return state_a, state_b, owner
 
 
-def clash_step(state, owner, model_a, model_b):
+def clash_step(state_a, state_b, owner, model_a, model_b):
     with torch.inference_mode():
-        proposed_a = model_a(state, steps=1)
-        proposed_b = model_b(state, steps=1)
+        proposed_a = model_a(state_a, steps=1)
+        proposed_b = model_b(state_b, steps=1)
 
         alpha_a = proposed_a[:, 3:4].clamp(0.0, 1.0)
         alpha_b = proposed_b[:, 3:4].clamp(0.0, 1.0)
@@ -120,30 +121,46 @@ def clash_step(state, owner, model_a, model_b):
         near_a = F.max_pool2d(owned_a.float(), 3, stride=1, padding=1) > 0
         near_b = F.max_pool2d(owned_b.float(), 3, stride=1, padding=1) > 0
 
-        frontier = (near_a & near_b) | ((owner == 0) & (near_a | near_b))
-        active = torch.maximum(alpha_a, alpha_b) > 0.05
-
-        next_state = state.clone()
-        next_state = torch.where(owned_a.expand_as(next_state), proposed_a, next_state)
-        next_state = torch.where(owned_b.expand_as(next_state), proposed_b, next_state)
-
-        a_wins = alpha_a >= alpha_b
-        winner_state = torch.where(a_wins.expand_as(next_state), proposed_a, proposed_b)
-        next_state = torch.where((frontier & active).expand_as(next_state), winner_state, next_state)
+        # each model keeps its own hidden state now, otherwise they poison each other
+        claim_a = (alpha_a > 0.05) & (owned_a | near_a)
+        claim_b = (alpha_b > 0.05) & (owned_b | near_b)
 
         next_owner = owner.clone()
+        only_a = claim_a & ~claim_b
+        only_b = claim_b & ~claim_a
+        both = claim_a & claim_b
+
+        next_owner = torch.where(only_a, torch.ones_like(next_owner), next_owner)
+        next_owner = torch.where(only_b, torch.full_like(next_owner, 2), next_owner)
+
+        a_wins = alpha_a >= alpha_b
         winner_owner = torch.where(a_wins, torch.ones_like(owner), torch.full_like(owner, 2))
-        next_owner = torch.where(frontier & active, winner_owner, next_owner)
+        next_owner = torch.where(both, winner_owner, next_owner)
 
-        dead = F.max_pool2d(next_state[:, 3:4], 3, stride=1, padding=1) <= 0.1
-        next_state = torch.where(dead.expand_as(next_state), torch.zeros_like(next_state), next_state)
-        next_owner = torch.where(dead, torch.zeros_like(next_owner), next_owner)
+        next_state_a = torch.where((next_owner == 1).expand_as(proposed_a), proposed_a, torch.zeros_like(proposed_a))
+        next_state_b = torch.where((next_owner == 2).expand_as(proposed_b), proposed_b, torch.zeros_like(proposed_b))
 
-    return next_state, next_owner
+        dead_a = F.max_pool2d(next_state_a[:, 3:4], 3, stride=1, padding=1) <= 0.1
+        dead_b = F.max_pool2d(next_state_b[:, 3:4], 3, stride=1, padding=1) <= 0.1
+
+        next_state_a = torch.where(dead_a.expand_as(next_state_a), torch.zeros_like(next_state_a), next_state_a)
+        next_state_b = torch.where(dead_b.expand_as(next_state_b), torch.zeros_like(next_state_b), next_state_b)
+        next_owner = torch.where(dead_a & (next_owner == 1), torch.zeros_like(next_owner), next_owner)
+        next_owner = torch.where(dead_b & (next_owner == 2), torch.zeros_like(next_owner), next_owner)
+
+    return next_state_a, next_state_b, next_owner
 
 
-def render_surface(state):
-    rgba = state[0, :4].detach().cpu().clamp(0.0, 1.0)
+def compose_state(state_a, state_b, owner):
+    return torch.where(
+        (owner == 1).expand_as(state_a),
+        state_a,
+        torch.where((owner == 2).expand_as(state_b), state_b, torch.zeros_like(state_a)),
+    )
+
+
+def render_surface(state_a, state_b, owner):
+    rgba = compose_state(state_a, state_b, owner)[0, :4].detach().cpu().clamp(0.0, 1.0)
     rgb = rgba[:3] * rgba[3:4]
     image = (rgb.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
     return pygame.surfarray.make_surface(image.swapaxes(0, 1))
@@ -191,7 +208,7 @@ def main():
 
     paused = False
     frames = 0
-    state, owner = reset_world(args.grid_size, args.device)
+    state_a, state_b, owner = reset_world(args.grid_size, args.device)
 
     digit_keys = {
         pygame.K_1: 0,
@@ -216,7 +233,7 @@ def main():
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
-                    state, owner = reset_world(args.grid_size, args.device)
+                    state_a, state_b, owner = reset_world(args.grid_size, args.device)
                 elif event.key in digit_keys and digit_keys[event.key] < len(targets):
                     target_id = digit_keys[event.key]
                     if event.mod & pygame.KMOD_SHIFT:
@@ -227,17 +244,24 @@ def main():
                         left_index, left_target = select_target(target_id, targets)
                         left_model = ensure_model(left_target, args.device, args.bootstrap_steps)
                         print(f"left  -> {left_target.stem}")
-                    state, owner = reset_world(args.grid_size, args.device)
+                    state_a, state_b, owner = reset_world(args.grid_size, args.device)
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 width, height = window.get_size()
                 gx = int(event.pos[0] * args.grid_size / max(width, 1))
                 gy = int(event.pos[1] * args.grid_size / max(height, 1))
-                state, owner = crater(state, owner, gx, gy, radius=max(2, args.grid_size // 12))
+                state_a, state_b, owner = crater(
+                    state_a,
+                    state_b,
+                    owner,
+                    gx,
+                    gy,
+                    radius=max(2, args.grid_size // 12),
+                )
 
         if not paused:
-            state, owner = clash_step(state, owner, left_model, right_model)
+            state_a, state_b, owner = clash_step(state_a, state_b, owner, left_model, right_model)
 
-        surface = render_surface(state)
+        surface = render_surface(state_a, state_b, owner)
         scaled = pygame.transform.scale(surface, window.get_size())
         window.fill((0, 0, 0))
         window.blit(scaled, (0, 0))

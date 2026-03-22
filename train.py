@@ -39,6 +39,29 @@ def save_checkpoint(model, out_path, args, target_path, train_steps):
     torch.save(blob, out_path)
 
 
+def damage_batch(batch, damage_prob=0.5):
+    if damage_prob <= 0:
+        return batch
+
+    size = batch.shape[-1]
+    yy = torch.arange(size, device=batch.device).view(1, 1, size, 1)
+    xx = torch.arange(size, device=batch.device).view(1, 1, 1, size)
+
+    for index in range(1, batch.shape[0]):
+        if random.random() > damage_prob:
+            continue
+        radius = random.randint(max(2, size // 8), max(3, size // 4))
+        cx = random.randint(radius, size - radius - 1)
+        cy = random.randint(radius, size - radius - 1)
+        crater = ((xx - cx).pow(2) + (yy - cy).pow(2)) <= radius * radius
+        batch[index] = torch.where(
+            crater.expand_as(batch[index : index + 1]),
+            torch.zeros_like(batch[index : index + 1]),
+            batch[index : index + 1],
+        )[0]
+    return batch
+
+
 def train_target(
     target_path,
     out_path=None,
@@ -53,6 +76,8 @@ def train_target(
     save_every=250,
     seed=0,
     device=None,
+    damage_prob=0.5,
+    resume=True,
 ):
     if device is None:
         device = pick_device()
@@ -84,6 +109,14 @@ def train_target(
     )
 
     model = NCA().to(device)
+    start_step = 0
+    if resume and out_path.exists():
+        blob = torch.load(out_path, map_location=device)
+        if blob.get("target_name") == target_path.stem:
+            model.load_state_dict(blob["state_dict"])
+            start_step = int(blob.get("train_steps", 0) or 0)
+            print(f"resuming {target_path.name} from step {start_step}")
+
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     pool = make_seed(
         pool_size,
@@ -100,16 +133,21 @@ def train_target(
 
     save_every = max(1, save_every)
 
+    if start_step >= steps:
+        print(f"{target_path.name} already has {start_step} steps")
+        return out_path
+
     print(f"training {target_path.name} on {device}")
     start = time.time()
     ema = None
 
-    for step in range(1, steps + 1):
+    for step in range(start_step + 1, steps + 1):
         batch_ids = torch.randint(pool_size, (batch_size,), device=device)
         batch = pool[batch_ids].clone()
 
         # one fresh seed in the batch keeps the organism honest
         batch[0] = fresh_seed
+        batch = damage_batch(batch, damage_prob=damage_prob)
 
         rollout = random.randint(min_rollout, max_rollout)
         batch = model(batch, steps=rollout)
@@ -129,7 +167,7 @@ def train_target(
 
         if step % 50 == 0 or step == 1 or step == steps:
             elapsed = max(time.time() - start, 1e-6)
-            speed = step / elapsed
+            speed = (step - start_step) / elapsed
             print(
                 f"step {step:4d}/{steps} loss {value:.5f} ema {ema:.5f} "
                 f"rollout {rollout:2d} speed {speed:.2f} it/s"
@@ -157,6 +195,9 @@ def main():
     parser.add_argument("--save-every", type=int, default=250)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=pick_device())
+    parser.add_argument("--damage-prob", type=float, default=0.5)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--no-resume", action="store_true")
     args = parser.parse_args()
 
     train_target(
@@ -173,6 +214,8 @@ def main():
         save_every=args.save_every,
         seed=args.seed,
         device=args.device,
+        damage_prob=args.damage_prob,
+        resume=args.resume or not args.no_resume,
     )
 
 
