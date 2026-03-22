@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 weights/*.pt
+runs_v2/
+bundles_v2/
+*.tar.gz
