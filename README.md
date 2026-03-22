@@ -18,6 +18,12 @@ for a better organism, train a target properly:
 python train.py --target targets/01_heart.png --steps 3000
 ```
 
+## notebook
+
+there is a detailed implementation walkthrough in `petri_clash_walkthrough.ipynb`.
+
+it goes through the build in detail, including the nca core, the training loop, the clash loop, and the bug fixes that happened along the way.
+
 ## controls
 
 - `space` pause / resume
