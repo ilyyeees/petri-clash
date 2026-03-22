@@ -186,8 +186,14 @@ def checkpoint_rng_blob():
 def restore_rng_blob(blob):
     if not blob:
         return
+
+    def cpu_byte_tensor(value):
+        if torch.is_tensor(value):
+            return value.detach().to(device="cpu", dtype=torch.uint8)
+        return torch.as_tensor(value, dtype=torch.uint8, device="cpu")
+
     random.setstate(blob["python"])
     np.random.set_state(blob["numpy"])
-    torch.random.set_rng_state(blob["torch"])
+    torch.random.set_rng_state(cpu_byte_tensor(blob["torch"]))
     if torch.cuda.is_available() and "cuda" in blob:
-        torch.cuda.set_rng_state_all(blob["cuda"])
+        torch.cuda.set_rng_state_all([cpu_byte_tensor(state) for state in blob["cuda"]])
