@@ -47,14 +47,12 @@
     "hidden_size": 256
   },
   "run": {
-    "fallback_seeds": [
-      1,
-      2
-    ],
     "group_name": "single_gpu_all_targets",
     "output_root": "runs_v2",
     "seeds": [
-      0
+      0,
+      1,
+      2
     ],
     "target_glob": "targets/*.png"
   },
@@ -65,18 +63,7 @@
     "matmul_precision": "high",
     "resolved_device": "cuda"
   },
-  "seed": 0,
-  "stop": {
-    "collapsed_min_delta": 0.001,
-    "collapsed_min_step": 3000,
-    "collapsed_patience_steps": 1000,
-    "collapsed_score": 0.2,
-    "converged_min_delta": 5e-06,
-    "converged_min_step": 10000,
-    "converged_patience_steps": 500,
-    "converged_score": 6e-05,
-    "enabled": true
-  },
+  "seed": 1,
   "target": "targets/01_heart.png",
   "train": {
     "amp": true,

@@ -77,7 +77,7 @@
     "converged_score": 6e-05,
     "enabled": true
   },
-  "target": "targets/01_heart.png",
+  "target": "targets/02_star.png",
   "train": {
     "amp": true,
     "amp_dtype": "bfloat16",

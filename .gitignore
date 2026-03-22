@@ -5,10 +5,4 @@ weights/*.pt
 runs_v2/
 bundles_v2/
 *.tar.gz
-v2/weights/*/seed_000/checkpoints/latest.pt
-v2/weights/*/seed_000/metrics.jsonl
-v2/weights/*/seed_000/previews/*.png
-!v2/weights/*/seed_000/previews/step_11000_eval.png
-v2/weights/*/seed_000/tensorboard/
-v2/weights/*/seed_001/
-v2/weights/*/seed_002/
+v2/weights/*/seed_*/checkpoints/latest.pt
