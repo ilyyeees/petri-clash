@@ -1,0 +1,109 @@
+{
+  "data": {
+    "grid_size": 48,
+    "target_size": 40
+  },
+  "eval": {
+    "best_tail": 2,
+    "damage_after": 96,
+    "damage_radius_frac": 0.16,
+    "preview_scale": 6,
+    "preview_steps": [
+      32,
+      64,
+      128,
+      192,
+      256
+    ],
+    "recover_steps": 96,
+    "recovery_preview_steps": [
+      0,
+      24,
+      48,
+      72,
+      96
+    ],
+    "score_recovery_weight": 0.35,
+    "steps": [
+      64,
+      128,
+      192,
+      256
+    ]
+  },
+  "loss": {
+    "alpha_weight": 1.0,
+    "bg_alpha_weight": 2.5,
+    "hidden_weight": 0.0002,
+    "mass_weight": 0.5,
+    "overflow_kernel": 9,
+    "overflow_weight": 5.0,
+    "rgb_weight": 1.5,
+    "rgba_weight": 0.5
+  },
+  "model": {
+    "channels": 24,
+    "fire_rate": 0.5,
+    "hidden_size": 256
+  },
+  "run": {
+    "fallback_seeds": [
+      1,
+      2
+    ],
+    "group_name": "single_gpu_all_targets",
+    "output_root": "runs_v2",
+    "seeds": [
+      0
+    ],
+    "target_glob": "targets/*.png"
+  },
+  "runtime": {
+    "allow_tf32": true,
+    "benchmark": true,
+    "device": "auto",
+    "matmul_precision": "high",
+    "resolved_device": "cuda"
+  },
+  "seed": 2,
+  "stop": {
+    "collapsed_min_delta": 0.001,
+    "collapsed_min_step": 3000,
+    "collapsed_patience_steps": 1000,
+    "collapsed_score": 0.2,
+    "converged_min_delta": 5e-06,
+    "converged_min_step": 10000,
+    "converged_patience_steps": 500,
+    "converged_score": 6e-05,
+    "enabled": true
+  },
+  "target": "targets/03_sun.png",
+  "train": {
+    "amp": true,
+    "amp_dtype": "bfloat16",
+    "batch_size": 48,
+    "channels_last": true,
+    "compile": false,
+    "compile_mode": "default",
+    "damage_max_radius_frac": 0.22,
+    "damage_min_radius_frac": 0.1,
+    "damage_prob": 0.6,
+    "end_rollout_max": 256,
+    "end_rollout_min": 160,
+    "eval_every": 500,
+    "fresh_seed_count": 2,
+    "grad_clip": 1.0,
+    "lr": 0.0015,
+    "lr_schedule": "cosine",
+    "min_lr_scale": 0.08,
+    "pool_size": 2048,
+    "preview_every": 500,
+    "resume": true,
+    "save_every": 250,
+    "start_rollout_max": 96,
+    "start_rollout_min": 48,
+    "steps": 12000,
+    "warmup_steps": 250,
+    "weight_decay": 0.0
+  }
+}
