@@ -21,6 +21,16 @@ python train.py --target targets/01_heart.png --steps 3000
 
 `train.py` is now just a single-target wrapper around the `trainer/` stack, so it writes the same v2-format weights that `clash.py` expects.
 
+if you want the organisms to grow with training-like freedom instead of hard territory rules, use:
+
+```bash
+python soft_clash.py
+```
+
+`soft_clash.py` keeps the two nca states separate, but it removes the hard ownership gate, control field, and territory zeroing from `clash.py`.
+that matters because some accepted v2 models can grow fine in solo rollout or soft clash, then stall in hard clash because their frontier cells lose hidden state before they can capture territory.
+the weaker and thinner-shape models are the ones that suffer most from that.
+
 ## big gpu training
 
 for remote long-horizon training on a single rented gpu, use the `trainer/` stack inside this folder.
@@ -72,4 +82,18 @@ if you want the exact final run summary, open `trainer_artifacts/single_gpu_all_
 - `1` to `9` pick the left organism target
 - `shift+1` to `shift+9` pick the right organism target
 - left click drops a damage crater
+- `esc` quits
+
+## soft clash controls
+
+- `space` pause / resume
+- `r` reset the two starting seeds
+- `c` clear the board
+- `t` toggle team colors
+- `[` and `]` shrink / grow crater size
+- `1` to `9` pick the left organism target
+- `shift+1` to `shift+9` pick the right organism target
+- left click drops a crater without enforcing ownership rules
+- `shift+left click` plants a left seed
+- right click plants a right seed
 - `esc` quits
