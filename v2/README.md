@@ -29,6 +29,42 @@ the setup and workflow are in `trainer/README.md`.
 
 that stack now uses resumable checkpoints, a cosine lr schedule, tensorboard logs, and shell wrappers built around `python -m trainer...` entrypoints.
 
+## current training status
+
+the full all-target gpu run artifacts are saved under `weights/` and the run-level metadata is under `trainer_artifacts/single_gpu_all_targets/`.
+
+targets with a usable accepted seed:
+
+- `01_heart` -> use `weights/01_heart/seed_000/`
+- `02_star` -> use `weights/02_star/seed_001/`
+- `03_sun` -> use `weights/03_sun/seed_002/`
+- `06_flower` -> use `weights/06_flower/seed_002/`
+- `07_umbrella` -> use `weights/07_umbrella/seed_000/`
+
+what actually converged:
+
+- `02_star/seed_001` is the only run that hit the explicit `converged` stop and ended early
+
+accepted but ran the full budget instead of hitting the explicit convergence stop:
+
+- `01_heart/seed_000`
+- `03_sun/seed_002`
+- `06_flower/seed_002`
+- `07_umbrella/seed_000`
+
+failed targets:
+
+- `04_moon` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
+- `05_bolt` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
+- `08_yin` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
+- `09_skull` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
+
+one important caveat:
+
+- `03_sun/seed_002` was accepted by the pipeline, but it is much weaker than heart, star, flower, and umbrella and does not fully nail the target shape
+
+if you want the exact final run summary, open `trainer_artifacts/single_gpu_all_targets/group_summary.json` and `trainer_artifacts/single_gpu_all_targets/logs/train_all-20260322-210038.log`.
+
 ## controls
 
 - `space` pause / resume
