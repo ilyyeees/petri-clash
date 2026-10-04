@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "benchmark": "petri-clash-cpu-simulation",
+  "mode": "hard",
+  "synthetic": false,
+  "runtime": {
+    "device": "cpu",
+    "seed": 0,
+    "cpu_threads": 1,
+    "interop_threads": 9,
+    "logical_cpu_count": 9,
+    "deterministic_algorithms": true,
+    "python_version": "3.12.14",
+    "torch_version": "2.14.1+cpu",
+    "numpy_version": "2.3.5",
+    "platform": "Linux",
+    "machine": "x86_64"
+  },
+  "grid": {
+    "height": 48,
+    "width": 48,
+    "batch_size": 1
+  },
+  "models": [
+    {
+      "kind": "v2",
+      "source": "v2/weights/01_heart/seed_000/checkpoints/best.pt",
+      "channels": 24,
+      "hidden_size": 256,
+      "fire_rate": 0.5,
+      "parameters": 24856,
+      "dtype": "torch.float32",
+      "training_grid_size": 48,
+      "checkpoint_sha256": "e6822b52c3f9e7680c51c64b310620843b459cc283ddb5cf898b6616b77b7231"
+    },
+    {
+      "kind": "v2",
+      "source": "v2/weights/02_star/seed_001/checkpoints/best.pt",
+      "channels": 24,
+      "hidden_size": 256,
+      "fire_rate": 0.5,
+      "parameters": 24856,
+      "dtype": "torch.float32",
+      "training_grid_size": 48,
+      "checkpoint_sha256": "99ebdd07e2c647cf11fbc164eb0db6481ef1ef9e468d75a9bea48734e07bc076"
+    }
+  ],
+  "initial_positions": [
+    [
+      12,
+      24
+    ],
+    [
+      36,
+      24
+    ]
+  ],
+  "measurement": {
+    "unit": "one simulation step",
+    "includes": "neural update and battle rules",
+    "excludes": [
+      "model loading",
+      "warmup",
+      "rendering",
+      "event handling",
+      "FPS pacing",
+      "final diagnostics"
+    ]
+  },
+  "warmup_steps": 20,
+  "measured_steps": 100,
+  "step_ms": {
+    "min": 6.864882,
+    "p50": 7.4324770000000004,
+    "p95": 8.78925065,
+    "max": 9.57858,
+    "mean": 7.59685745
+  },
+  "total_measured_ms": 759.685745,
+  "steps_per_second": 131.6333769037617,
+  "final_state": [
+    {
+      "alive_cells": 242,
+      "finite": true,
+      "sha256": "10975f9aafa46f461049d6d61560cdd7d8646e2fc06bf71b2a7b5bdbafea4d8d"
+    },
+    {
+      "alive_cells": 181,
+      "finite": true,
+      "sha256": "53cd72b2c6881c0ce5a2d3fd8ce7a54836a1a47a0d70180c1d777470e620a6c1"
+    }
+  ],
+  "final_owned_cells": [
+    248,
+    184
+  ]
+}

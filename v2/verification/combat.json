@@ -1,0 +1,88 @@
+{
+  "match": "01_heart seed000 vs 02_star seed001",
+  "positions": [
+    [
+      20,
+      24
+    ],
+    [
+      28,
+      24
+    ]
+  ],
+  "random_seed": 42,
+  "device": "cpu",
+  "threads": 1,
+  "grid": 48,
+  "steps": 512,
+  "seconds": 4.0498,
+  "captures": 388,
+  "releases": 12,
+  "snapshots": [
+    {
+      "step": 64,
+      "alive_a": 198,
+      "alive_b": 139,
+      "owned_a": 189,
+      "owned_b": 130,
+      "control_max": 1.0
+    },
+    {
+      "step": 128,
+      "alive_a": 195,
+      "alive_b": 140,
+      "owned_a": 197,
+      "owned_b": 142,
+      "control_max": 1.0
+    },
+    {
+      "step": 256,
+      "alive_a": 195,
+      "alive_b": 139,
+      "owned_a": 200,
+      "owned_b": 139,
+      "control_max": 1.0
+    },
+    {
+      "step": "256_after_crater",
+      "alive_a": 159,
+      "alive_b": 130,
+      "owned_a": 164,
+      "owned_b": 132,
+      "control_max": 1.0
+    },
+    {
+      "step": 257,
+      "alive_a": 163,
+      "alive_b": 135,
+      "owned_a": 164,
+      "owned_b": 132,
+      "control_max": 1.0
+    },
+    {
+      "step": 320,
+      "alive_a": 188,
+      "alive_b": 141,
+      "owned_a": 194,
+      "owned_b": 142,
+      "control_max": 1.0
+    },
+    {
+      "step": 384,
+      "alive_a": 192,
+      "alive_b": 139,
+      "owned_a": 196,
+      "owned_b": 142,
+      "control_max": 1.0
+    },
+    {
+      "step": 512,
+      "alive_a": 189,
+      "alive_b": 141,
+      "owned_a": 194,
+      "owned_b": 141,
+      "control_max": 1.0
+    }
+  ],
+  "checks": "All 512 ticks finite and no surviving enemy state in opposing owned territory; control in [-1,1]. Crater at (24,24), radius4, after tick256."
+}

@@ -1,0 +1,565 @@
+{
+  "device": "cpu",
+  "torch": "2.14.1+cpu",
+  "threads": 1,
+  "grid": 48,
+  "steps": 256,
+  "note": "One pretrained organism against a dormant opponent, centered seed; seed 42 is reset for each mode. Existing checkpoint weights are never modified. Alive threshold is alpha > 0.1. Baseline is original commit 9a941a7 clash_step.",
+  "rows": [
+    {
+      "target": "01_heart",
+      "checkpoint_seed": 0,
+      "mode": "baseline_hard",
+      "random_seed": 42,
+      "seconds": 0.9241,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 24,
+          "owned": 26,
+          "alpha_mass": 22.725154876708984,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 96,
+          "owned": 96,
+          "alpha_mass": 85.6444320678711,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 158,
+          "owned": 158,
+          "alpha_mass": 137.32376098632812,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 180,
+          "owned": 185,
+          "alpha_mass": 157.081787109375,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "01_heart",
+      "checkpoint_seed": 0,
+      "mode": "frontier_hard",
+      "random_seed": 42,
+      "seconds": 1.1133,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 223,
+          "owned": 148,
+          "alpha_mass": 132.94776916503906,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 239,
+          "owned": 245,
+          "alpha_mass": 208.6881866455078,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 242,
+          "owned": 248,
+          "alpha_mass": 216.9876708984375,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 242,
+          "owned": 248,
+          "alpha_mass": 217.4031982421875,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "01_heart",
+      "checkpoint_seed": 0,
+      "mode": "solo_nca",
+      "random_seed": 42,
+      "seconds": 0.6992,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 220,
+          "owned": null,
+          "alpha_mass": 132.6057586669922,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 237,
+          "owned": null,
+          "alpha_mass": 208.4700927734375,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 241,
+          "owned": null,
+          "alpha_mass": 217.02230834960938,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 243,
+          "owned": null,
+          "alpha_mass": 217.42144775390625,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "02_star",
+      "checkpoint_seed": 1,
+      "mode": "baseline_hard",
+      "random_seed": 42,
+      "seconds": 0.8696,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 10,
+          "owned": 11,
+          "alpha_mass": 8.780165672302246,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 29,
+          "owned": 29,
+          "alpha_mass": 22.342132568359375,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 52,
+          "owned": 58,
+          "alpha_mass": 39.45721435546875,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 92,
+          "owned": 98,
+          "alpha_mass": 68.30370330810547,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "02_star",
+      "checkpoint_seed": 1,
+      "mode": "frontier_hard",
+      "random_seed": 42,
+      "seconds": 1.1116,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 134,
+          "owned": 95,
+          "alpha_mass": 88.29624938964844,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 174,
+          "owned": 170,
+          "alpha_mass": 136.15171813964844,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 182,
+          "owned": 185,
+          "alpha_mass": 148.78721618652344,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 182,
+          "owned": 187,
+          "alpha_mass": 148.71435546875,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "02_star",
+      "checkpoint_seed": 1,
+      "mode": "solo_nca",
+      "random_seed": 42,
+      "seconds": 0.7232,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 132,
+          "owned": null,
+          "alpha_mass": 89.05619049072266,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 173,
+          "owned": null,
+          "alpha_mass": 136.0946044921875,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 183,
+          "owned": null,
+          "alpha_mass": 148.904052734375,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 183,
+          "owned": null,
+          "alpha_mass": 148.7084503173828,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "03_sun",
+      "checkpoint_seed": 2,
+      "mode": "baseline_hard",
+      "random_seed": 42,
+      "seconds": 0.9038,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 9,
+          "owned": 10,
+          "alpha_mass": 7.171967029571533,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 26,
+          "owned": 28,
+          "alpha_mass": 19.06100082397461,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 28,
+          "owned": 39,
+          "alpha_mass": 9.237656593322754,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 0,
+          "owned": 0,
+          "alpha_mass": 0.0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "03_sun",
+      "checkpoint_seed": 2,
+      "mode": "frontier_hard",
+      "random_seed": 42,
+      "seconds": 1.0702,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 75,
+          "owned": 63,
+          "alpha_mass": 54.25104904174805,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 126,
+          "owned": 111,
+          "alpha_mass": 78.63145446777344,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 126,
+          "owned": 144,
+          "alpha_mass": 90.36127471923828,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 126,
+          "owned": 134,
+          "alpha_mass": 90.37725067138672,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "03_sun",
+      "checkpoint_seed": 2,
+      "mode": "solo_nca",
+      "random_seed": 42,
+      "seconds": 0.6827,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 80,
+          "owned": null,
+          "alpha_mass": 55.81159973144531,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 129,
+          "owned": null,
+          "alpha_mass": 82.61289978027344,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 133,
+          "owned": null,
+          "alpha_mass": 95.8885726928711,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 133,
+          "owned": null,
+          "alpha_mass": 95.75425720214844,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "06_flower",
+      "checkpoint_seed": 2,
+      "mode": "baseline_hard",
+      "random_seed": 42,
+      "seconds": 0.9007,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 2,
+          "owned": 2,
+          "alpha_mass": 0.5528092980384827,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 2,
+          "owned": 2,
+          "alpha_mass": 0.3571021556854248,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 0,
+          "owned": 0,
+          "alpha_mass": 0.0,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 0,
+          "owned": 0,
+          "alpha_mass": 0.0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "06_flower",
+      "checkpoint_seed": 2,
+      "mode": "frontier_hard",
+      "random_seed": 42,
+      "seconds": 1.2093,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 121,
+          "owned": 76,
+          "alpha_mass": 62.272464752197266,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 239,
+          "owned": 211,
+          "alpha_mass": 164.63880920410156,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 247,
+          "owned": 264,
+          "alpha_mass": 212.9974822998047,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 246,
+          "owned": 257,
+          "alpha_mass": 212.60020446777344,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "06_flower",
+      "checkpoint_seed": 2,
+      "mode": "solo_nca",
+      "random_seed": 42,
+      "seconds": 0.7364,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 121,
+          "owned": null,
+          "alpha_mass": 63.64398193359375,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 238,
+          "owned": null,
+          "alpha_mass": 165.80960083007812,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 247,
+          "owned": null,
+          "alpha_mass": 212.68226623535156,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 246,
+          "owned": null,
+          "alpha_mass": 212.59152221679688,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "07_umbrella",
+      "checkpoint_seed": 0,
+      "mode": "baseline_hard",
+      "random_seed": 42,
+      "seconds": 0.8597,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 2,
+          "owned": 2,
+          "alpha_mass": 1.1573013067245483,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 2,
+          "owned": 2,
+          "alpha_mass": 1.2573204040527344,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 2,
+          "owned": 2,
+          "alpha_mass": 1.1554670333862305,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 0,
+          "owned": 0,
+          "alpha_mass": 0.0,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "07_umbrella",
+      "checkpoint_seed": 0,
+      "mode": "frontier_hard",
+      "random_seed": 42,
+      "seconds": 1.1481,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 137,
+          "owned": 104,
+          "alpha_mass": 94.15824127197266,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 157,
+          "owned": 158,
+          "alpha_mass": 128.80516052246094,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 165,
+          "owned": 171,
+          "alpha_mass": 135.22720336914062,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 166,
+          "owned": 173,
+          "alpha_mass": 135.60037231445312,
+          "finite": true
+        }
+      ]
+    },
+    {
+      "target": "07_umbrella",
+      "checkpoint_seed": 0,
+      "mode": "solo_nca",
+      "random_seed": 42,
+      "seconds": 0.6979,
+      "snapshots": [
+        {
+          "step": 32,
+          "alive": 134,
+          "owned": null,
+          "alpha_mass": 94.38839721679688,
+          "finite": true
+        },
+        {
+          "step": 64,
+          "alive": 158,
+          "owned": null,
+          "alpha_mass": 129.27725219726562,
+          "finite": true
+        },
+        {
+          "step": 128,
+          "alive": 166,
+          "owned": null,
+          "alpha_mass": 135.36585998535156,
+          "finite": true
+        },
+        {
+          "step": 256,
+          "alive": 166,
+          "owned": null,
+          "alpha_mass": 135.5996856689453,
+          "finite": true
+        }
+      ]
+    }
+  ]
+}

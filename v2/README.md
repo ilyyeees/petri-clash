@@ -1,99 +1,105 @@
-# petri clash
+# Petri Clash · Living arena
 
-two neural cellular automata grow on the same grid and fight over it.
+Two independently trained neural cellular automata grow, collide, and regenerate. Watch the learned organisms, paint damage into the world, or inspect the territory and pressure underneath.
 
-## run it
+![Living arena](verification/arena.png)
 
-```bash
-conda env create -f environment.yml
-conda activate petri-clash
-python clash.py
-```
+## Play on CPU, without retraining
 
-on a fresh repo, `clash.py` will do a quick bootstrap train for any missing weights and save them in `weights/`.
-that bootstrap now goes through the v2 trainer and exports a seed folder like `weights/01_heart/seed_000/`.
-
-for a better organism, train a target properly:
+From the repository root, using Python 3.11 or newer:
 
 ```bash
-python train.py --target targets/01_heart.png --steps 3000
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r v2/requirements.txt
+python v2/clash.py --device cpu
 ```
 
-`train.py` is now just a single-target wrapper around the `trainer/` stack, so it writes the same v2-format weights that `clash.py` expects.
+Alternatively, the existing `v2/environment.yml` conda environment remains available. On Apple silicon, install the normal PyTorch wheel rather than the CPU-specific index; `--device auto` selects MPS when available. GPU paths are retained but this upgrade was verified on CPU only.
 
-if you want the organisms to grow with training-like freedom instead of hard territory rules, use:
+Start with heart versus star. The visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. Sun is usable but noticeably weaker than the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
 
 ```bash
-python soft_clash.py
+python v2/clash.py --list-models
+python v2/clash.py --left 6 --right 7 --device cpu  # flower vs umbrella
+python v2/soft_clash.py --device cpu              # free growth, no territory exclusion
 ```
 
-`soft_clash.py` keeps the two nca states separate, but it removes the hard ownership gate, control field, and territory zeroing from `clash.py`.
-that matters because some accepted v2 models can grow fine in solo rollout or soft clash, then stall in hard clash because their frontier cells lose hidden state before they can capture territory.
-the weaker and thinner-shape models are the ones that suffer most from that.
+There is no hidden bootstrap training or silent untrained fallback. Researchers can explicitly inspect failed or unverified weights using `--allow-unhealthy`, or request training with `--bootstrap-steps N`. An explicitly selected checkpoint seed must exist and pass the health filter unless overridden.
 
-## big gpu training
+## The upgraded rules
 
-for remote long-horizon training on a single rented gpu, use the `trainer/` stack inside this folder.
+Hard mode now lets neutral frontier cells retain their hidden developmental state while ownership accumulates. This fixes organisms that grew in training but immediately stalled or died under the previous ownership mask. Opponent-owned cells still suppress enemy hidden tissue; simultaneous proposals and sign-aware hysteresis keep captures symmetric. Abandoned land loses ownership, and nonfinite cells are quarantined.
 
-the setup and workflow are in `trainer/README.md`.
+Soft mode keeps both organisms independent. Switch modes with **M** or the mode button; changing mode resets the match. These are trained shape-growing organisms, not newly trained competitive agents. The rules improve growth and interaction without changing any weight files.
 
-that stack now uses resumable checkpoints, a cosine lr schedule, tensorboard logs, and shell wrappers built around `python -m trainer...` entrypoints.
+## Controls
 
-## current training status
+| Action | Control |
+|---|---|
+| Pause / resume | Space or PAUSE |
+| Advance one tick and pause | N or STEP |
+| Replay the same seed | R or RESET |
+| Cycle 1× / 2× / 4× / 8× speed | Tab or speed button |
+| Toggle hard / soft rules and reset | M or mode button |
+| Team colors | T or COLORS |
+| Life / land / pressure view | Sidebar buttons |
+| Select a culture | Click FOR LEFT / FOR RIGHT, then a tile |
+| Select left / right with keyboard | 1–9 / Shift+1–9 |
+| Damage crater | Left-click the arena |
+| Plant a left / right seed | Shift+left-click / right-click |
+| Change crater radius | [ / ] |
+| Clear the arena | C |
+| Exit | Esc |
 
-the full all-target gpu run artifacts are saved under `weights/` and the run-level metadata is under `trainer_artifacts/single_gpu_all_targets/`.
+The sidebar and title never receive grid clicks. Paused controls, repeated selection, damage, manual planting, and resizing are covered by CPU tests.
 
-targets with a usable accepted seed:
+## Reproducible headless runs
 
-- `01_heart` -> use `weights/01_heart/seed_000/`
-- `02_star` -> use `weights/02_star/seed_001/`
-- `03_sun` -> use `weights/03_sun/seed_002/`
-- `06_flower` -> use `weights/06_flower/seed_002/`
-- `07_umbrella` -> use `weights/07_umbrella/seed_000/`
+```bash
+python v2/clash.py --device cpu --seed 42 --headless-frames 256 \
+  --report match.json --snapshot match.png
+python v2/soft_clash.py --device cpu --headless-frames 256
+```
 
-what actually converged:
+`--headless-frames N` advances exactly N simulation ticks. It does not initialize SDL, create a window, render frames, or sleep to hit a frame rate. An optional snapshot renders only the final board via Pillow. `--report` records model sources, seed, rules, cell counts, territory, elapsed time, and device. `--snapshot` in interactive mode captures the complete window on exit. `--ui-frames N` bounds an interactive smoke run.
 
-- `02_star/seed_001` is the only run that hit the explicit `converged` stop and ended early
+The same seed, model, settings, device, software versions, and action sequence replay the same match. Reset restores the simulation seed. Cross-device or cross-version bitwise equality is not promised. `--left-pos x,y` and `--right-pos x,y` override starting positions; use `--grid-size N` to change the arena size.
 
-accepted but ran the full budget instead of hitting the explicit convergence stop:
+## CPU performance
 
-- `01_heart/seed_000`
-- `03_sun/seed_002`
-- `06_flower/seed_002`
-- `07_umbrella/seed_000`
+The app defaults to one Torch CPU thread for these small convolutions; override with `--cpu-threads N` or `PETRI_CPU_THREADS=N`. More threads can be slower. Use a measured setting for your own machine:
 
-failed targets:
+```bash
+python v2/benchmark.py --mode hard --steps 200 --warmup 20 --output benchmark.json
+python v2/benchmark.py --mode hard --cpu-threads 4 --steps 200
+python v2/benchmark.py --mode soft --steps 200
+python v2/benchmark.py --mode nca --synthetic --steps 200  # explicit untrained microbenchmark
+```
 
-- `04_moon` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
-- `05_bolt` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
-- `08_yin` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
-- `09_skull` -> `seed_000`, `seed_001`, and `seed_002` all collapsed
+Benchmarks exclude warmup, loading, rendering, and frame pacing. Reports include p50/p95 latency, steps/second, versions, model fingerprints, and final-state hashes. See [verification](verification/README.md) for actual CPU results. No NCA math or parameter layout was changed for a speculative speedup.
 
-one important caveat:
+## Training and checkpoint portability
 
-- `03_sun/seed_002` was accepted by the pipeline, but it is much weaker than heart, star, flower, and umbrella and does not fully nail the target shape
+```bash
+cd v2
+python train.py --target targets/01_heart.png --steps 3000 --device cpu
+python -m trainer.eval_v2 --run-dir weights/01_heart/seed_000 --device cpu
+```
 
-if you want the exact final run summary, open `trainer_artifacts/single_gpu_all_targets/group_summary.json` and `trainer_artifacts/single_gpu_all_targets/logs/train_all-20260322-210038.log`.
+Training is optional and may be slow on CPU. The [trainer guide](trainer/README.md) covers large runs. Evaluation now uses the saved architecture, data, and evaluation configuration, with explicit device overrides. Plain and `torch.compile` checkpoints work in play, evaluation, and resume. Existing exported weights are supported unchanged. New saves are atomic; resumable pool state keeps its original precision, so latest checkpoints can be larger than before.
 
-## controls
+Checkpoint loading uses PyTorch's restricted `weights_only` loader, with a narrow compatibility allowlist for historical NumPy RNG state. Only load checkpoints you trust. GPU execution and large training sweeps were not performed for this upgrade.
 
-- `space` pause / resume
-- `r` reset seed positions
-- `1` to `9` pick the left organism target
-- `shift+1` to `shift+9` pick the right organism target
-- left click drops a damage crater
-- `esc` quits
+## Tests
 
-## soft clash controls
+From the repository root:
 
-- `space` pause / resume
-- `r` reset the two starting seeds
-- `c` clear the board
-- `t` toggle team colors
-- `[` and `]` shrink / grow crater size
-- `1` to `9` pick the left organism target
-- `shift+1` to `shift+9` pick the right organism target
-- left click drops a crater without enforcing ownership rules
-- `shift+left click` plants a left seed
-- right click plants a right seed
-- `esc` quits
+```bash
+python -m pip install -r v2/requirements-dev.txt
+PETRI_TEST_CHECKPOINTS=1 python -m pytest v2/tests -q
+python -m compileall -q v2
+```
+
+The environment flag enables actual shipped-model growth checks; otherwise that slower check is skipped. CI runs the same CPU suite, plus headless and benchmark smoke runs. The workflow is included locally and has not run on GitHub until these changes are published.

@@ -1,0 +1,29 @@
+name: v2 CPU checks
+on:
+  push:
+    paths: ['v2/**', '.github/workflows/v2-cpu.yml']
+  pull_request:
+    paths: ['v2/**', '.github/workflows/v2-cpu.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SDL_VIDEODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: '1'
+      PETRI_TEST_CHECKPOINTS: '1'
+      PYTHONPATH: v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            v2/requirements.txt
+            v2/requirements-dev.txt
+      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -r v2/requirements-dev.txt
+      - run: python -m pytest v2/tests -q
+      - run: python v2/clash.py --device cpu --headless-frames 32 --report /tmp/match.json
+      - run: python v2/benchmark.py --steps 20 --warmup 5 --output /tmp/benchmark.json
