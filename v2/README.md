@@ -156,6 +156,8 @@ Benchmarks exclude warmup, loading, rendering, and frame pacing. Reports include
 
 The UI also avoids empty full-board effect overlays and prepares the fixed-size culture previews once. The [raster-efficiency report](verification/raster-efficiency.md) measures that drawing improvement and verifies identical pixels, simulation tensors and RNG state; it does not claim a simulation or native-display speedup.
 
+Ordinary CPU inference now reuses the first convolution's temporary activation for ReLU. With the shipped heart/star and heart/flower models, this reduced median simulation-tick latency by **24–32%** in the measured one-thread runs; four complete seeded duels retained bitwise-identical state and RNG at every tick. Training, accelerator, `torch.compile`, custom-layer and activation-hook paths retain the original allocation behavior. See the [inference-efficiency report and reproducible benchmark](verification/inference-efficiency.md) for timings, safeguards and limits; hardware-dependent simulation gains are not a universal FPS guarantee.
+
 ## Training and checkpoint portability
 
 ```bash

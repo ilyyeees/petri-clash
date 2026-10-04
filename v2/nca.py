@@ -40,7 +40,24 @@ class NCA(nn.Module):
 
         pre_life = self.alive_mask(x)
         y = self.perceive(x)
-        dx = self.fc1(F.relu(self.fc0(y)))
+        # Reuse only the ordinary inference convolution's fresh activation.
+        # Training, compilers, custom layers and activation-observing hooks
+        # retain the original out-of-place path. Check before fc0 executes:
+        # a hook may remove itself while retaining or replacing its output.
+        inplace_relu = (
+            not self.training
+            and x.device.type == "cpu"
+            and not torch.compiler.is_compiling()
+            and torch.is_inference_mode_enabled()
+            and type(self.fc0) is nn.Conv2d
+            and "forward" not in self.fc0.__dict__
+            and not self.fc0._forward_hooks
+            and not self.fc0._forward_pre_hooks
+            # PyTorch has no public global-hook query; fail closed if absent.
+            and not getattr(nn.modules.module, "_global_forward_hooks", True)
+            and not getattr(nn.modules.module, "_global_forward_pre_hooks", True)
+        )
+        dx = self.fc1(F.relu(self.fc0(y), inplace=inplace_relu))
 
         if fire_rate < 1.0:
             # this keeps updates patchy so the thing has to work asynchronously

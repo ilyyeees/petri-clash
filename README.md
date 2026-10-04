@@ -15,4 +15,4 @@ python -m pip install -r v2/requirements.txt
 python v2/clash.py --device cpu
 ```
 
-The two versions do not share code, targets, or weights. See the [CPU verification report](v2/verification/README.md) for measured results and limitations.
+The two versions do not share code, targets, or weights. See the [verification reports](v2/verification/README.md) for measured results and limitations.
