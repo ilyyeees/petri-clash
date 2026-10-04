@@ -2,7 +2,7 @@
 
 Two independently trained neural cellular automata grow, collide, and regenerate. Watch the learned organisms, paint damage into the world, or inspect the territory and pressure underneath.
 
-![Living arena feedback](verification/arena-feedback.png)
+![Current paused lab with damage feedback and mouse-only tools](verification/arena-overview.png)
 
 ## Play on CPU, without retraining
 
