@@ -56,13 +56,39 @@ def _near(mask):
     return F.max_pool2d(mask.to(torch.float32), 3, stride=1, padding=1) > 0
 
 
-def _finite_cells(state, strict=False):
+def _canonical_cpu_grid(value):
+    """Pass fusion is safe for the app's exact dense CPU layout only."""
+    if value.device.type != "cpu" or value.ndim != 4 or torch.compiler.is_compiling():
+        return False
+    batch, channels, height, width = value.shape
+    return (batch > 0 and channels > 0 and height > 0 and width > 0
+            and value.stride() == (channels * height * width, height * width, width, 1))
+
+
+def _finite_cells(state, strict=False, keep=None):
     # An unstable model must not poison neighboring cells on the next update.
     # Preserve every finite hidden value; clipping hidden channels changes the
     # pretrained dynamics. A cell with any nonfinite channel is removed instead.
-    finite = torch.isfinite(state).all(dim=1, keepdim=True)
+    if (state.device.type == "cpu" and state.shape[1] > 0
+            and not torch.compiler.is_compiling()
+            and state.dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64)):
+        # abs/amax cannot overflow finite real values; any NaN or infinity
+        # makes the reduction nonfinite. Only the predicate is reduced:
+        # surviving state values are returned without arithmetic or clipping.
+        finite = torch.isfinite(state.abs().amax(dim=1, keepdim=True))
+    else:
+        finite = torch.isfinite(state).all(dim=1, keepdim=True)
     if strict and not bool(finite.all()):
         raise FloatingPointError("Non-finite NCA state or proposal")
+    # Combine per-cell exclusions before touching every state channel.
+    # Strict validation still sees all cells, even ones about to be excluded.
+    if keep is not None:
+        # Fusing arbitrary strides can change the model's input layout and
+        # rand_like's value order. Preserve the original two passes outside
+        # exact dense eager CPU grids, including unusual singleton strides.
+        if not (_canonical_cpu_grid(state) and _canonical_cpu_grid(keep)):
+            return torch.where(keep, torch.where(finite, state, 0.0), 0.0)
+        finite = keep & finite
     return torch.where(finite, state, 0.0)
 
 
@@ -75,11 +101,11 @@ def momentum_owner(control, owner, capture_threshold, release_threshold):
     next_owner = torch.where(
         ((owner == 1) & (control <= release_threshold))
         | ((owner == 2) & (control >= -release_threshold)),
-        torch.zeros_like(owner),
+        0,
         owner,
     )
-    next_owner = torch.where(control >= capture_threshold, torch.ones_like(owner), next_owner)
-    return torch.where(control <= -capture_threshold, torch.full_like(owner, 2), next_owner)
+    next_owner = torch.where(control >= capture_threshold, 1, next_owner)
+    return torch.where(control <= -capture_threshold, 2, next_owner)
 
 
 def clash_step(
@@ -116,8 +142,8 @@ def clash_step(
         if strict_finite and not bool(torch.isfinite(control).all()):
             raise FloatingPointError("Non-finite battle control")
         owned_a, owned_b = owner == 1, owner == 2
-        clean_a = torch.where(owned_b, 0.0, _finite_cells(state_a, strict_finite))
-        clean_b = torch.where(owned_a, 0.0, _finite_cells(state_b, strict_finite))
+        clean_a = _finite_cells(state_a, strict_finite, ~owned_b)
+        clean_b = _finite_cells(state_b, strict_finite, ~owned_a)
         support_a = _near((clean_a[:, 3:4] > ALIVE_ALPHA) | owned_a)
         support_b = _near((clean_b[:, 3:4] > ALIVE_ALPHA) | owned_b)
 
@@ -125,8 +151,8 @@ def clash_step(
         proposed_b = model_b(clean_b, steps=1)
         if proposed_a.shape != state_a.shape or proposed_b.shape != state_b.shape:
             raise ValueError("each model must preserve its organism state's shape")
-        proposed_a = torch.where(support_a, _finite_cells(proposed_a, strict_finite), 0.0)
-        proposed_b = torch.where(support_b, _finite_cells(proposed_b, strict_finite), 0.0)
+        proposed_a = _finite_cells(proposed_a, strict_finite, support_a)
+        proposed_b = _finite_cells(proposed_b, strict_finite, support_b)
         alpha_a = proposed_a[:, 3:4].clamp(0.0, 1.0)
         alpha_b = proposed_b[:, 3:4].clamp(0.0, 1.0)
         strength_a = torch.where(alpha_a > CLAIM_ALPHA, alpha_a, 0.0)
@@ -139,14 +165,26 @@ def clash_step(
         next_owner = momentum_owner(next_control, owner, capture_threshold, release_threshold)
 
         # The important rule: neutral cells retain hidden developmental state.
-        next_a = torch.where(next_owner != 2, proposed_a, 0.0)
-        next_b = torch.where(next_owner != 1, proposed_b, 0.0)
-        life_a = _near(next_a[:, 3:4] > ALIVE_ALPHA)
-        life_b = _near(next_b[:, 3:4] > ALIVE_ALPHA)
-        next_a = torch.where(life_a, next_a, 0.0)
-        next_b = torch.where(life_b, next_b, 0.0)
+        if (_canonical_cpu_grid(proposed_a) and _canonical_cpu_grid(proposed_b)
+                and _canonical_cpu_grid(next_owner)):
+            # Life needs only alpha. Combine the small territory/life masks
+            # before touching every channel on the common dense CPU path.
+            keep_a, keep_b = next_owner != 2, next_owner != 1
+            life_a = _near((proposed_a[:, 3:4] > ALIVE_ALPHA) & keep_a)
+            life_b = _near((proposed_b[:, 3:4] > ALIVE_ALPHA) & keep_b)
+            next_a = torch.where(life_a & keep_a, proposed_a, 0.0)
+            next_b = torch.where(life_b & keep_b, proposed_b, 0.0)
+        else:
+            # The intermediate where also determines layout. Retain it for
+            # other layouts/devices rather than changing observable strides.
+            next_a = torch.where(next_owner != 2, proposed_a, 0.0)
+            next_b = torch.where(next_owner != 1, proposed_b, 0.0)
+            life_a = _near(next_a[:, 3:4] > ALIVE_ALPHA)
+            life_b = _near(next_b[:, 3:4] > ALIVE_ALPHA)
+            next_a = torch.where(life_a, next_a, 0.0)
+            next_b = torch.where(life_b, next_b, 0.0)
         abandoned = ((next_owner == 1) & ~life_a) | ((next_owner == 2) & ~life_b)
-        next_owner = torch.where(abandoned, torch.zeros_like(next_owner), next_owner)
+        next_owner = torch.where(abandoned, 0, next_owner)
         next_control = torch.where(abandoned | ~(life_a | life_b), 0.0, next_control)
 
     return next_a, next_b, next_owner, next_control
