@@ -122,3 +122,23 @@ python v2/verification/capture_picker_status.py --scenario fallback \
 
 The captures use dummy SDL, 160 simulation ticks and simulation seed 42. They
 verify raster layout and policy feedback, not native-display latency or FPS.
+
+## Follow-up: boolean evaluation values
+
+A later metadata audit found that Python's numeric conversion accepted JSON
+booleans as evaluation evidence: `score: false` became a perfect zero and could
+beat a genuinely evaluated seed in automatic selection. A boolean `true` collapse
+threshold became 1.0 instead of retaining the default 0.2.
+
+Boolean summary scores now follow the existing invalid-evidence path: unverified,
+with no public numeric score. They are still inspectable through the explicit
+unhealthy override, but are never labeled ready. Boolean optional thresholds
+retain the 0.2 fallback. Genuine numeric zero, finite numbers, numeric strings and
+positive custom thresholds keep their previous meanings; no new quality ranking
+or score bounds are introduced.
+
+The expanded metadata suite passed **115 tests**, including 64 new cases. Before
+the fix, those new cases reproduced 14 failing expectations. Afterward, all 23
+shipped score/health pairs and all 82 checked selection policies matched the prior
+revision, including every shipped pin and both automatic override policies.
+No model files or evaluation results were changed.

@@ -130,6 +130,60 @@ def test_nonfinite_score_is_unverified_and_json_safe(candidates, score, preferre
     assert status["selectable"] is allow_unhealthy
 
 
+@pytest.mark.parametrize("score", [False, True])
+@pytest.mark.parametrize("preferred_seed", [None, 0])
+@pytest.mark.parametrize("allow_unhealthy", [False, True])
+def test_boolean_score_is_unverified_and_json_safe(candidates, score, preferred_seed, allow_unhealthy):
+    target, add = candidates
+    path = add(0, score)
+    assert clash.seed_score(path.parents[1]) == float("inf")
+    status = assert_policy_matches_discovery(target, preferred_seed, allow_unhealthy)
+    assert status == {"status": "unverified", "score": None, "seed": 0,
+                      "checkpoint": str(path), "selectable": allow_unhealthy}
+
+
+@pytest.mark.parametrize("score", [0, .01])
+@pytest.mark.parametrize("allow_unhealthy", [False, True])
+def test_boolean_false_cannot_outrank_a_numeric_score(candidates, score, allow_unhealthy):
+    target, add = candidates
+    add(0, False)
+    genuine = add(1, score)
+    status = assert_policy_matches_discovery(target, allow_unhealthy=allow_unhealthy)
+    assert status == {"status": "ready", "score": float(score), "seed": 1,
+                      "checkpoint": str(genuine), "selectable": True}
+
+
+@pytest.mark.parametrize("score", [-1, 0, .01, .2, 1, 2, "-1", "0", ".01", ".2", "1", "2"])
+def test_finite_numeric_scores_and_strings_keep_existing_policy(candidates, score):
+    target, add = candidates
+    path = add(0, score)
+    numeric_score = float(score)
+    health = "ready" if numeric_score < .2 else "collapsed"
+    assert clash.seed_score(path.parents[1]) == numeric_score
+    for allow_unhealthy in (False, True):
+        status = assert_policy_matches_discovery(target, allow_unhealthy=allow_unhealthy)
+        assert status == {"status": health, "score": numeric_score, "seed": 0,
+                          "checkpoint": str(path),
+                          "selectable": health == "ready" or allow_unhealthy}
+
+
+@pytest.mark.parametrize("threshold,cutoff", [
+    (False, .2), (True, .2), (.2, .2), (".2", .2),
+    (.05, .05), (".05", .05), (1.0, 1.0), ("1.0", 1.0),
+])
+@pytest.mark.parametrize("score", [.01, .05, .2, .3, 1.0])
+def test_boolean_threshold_uses_default_but_numeric_thresholds_are_preserved(
+        candidates, threshold, cutoff, score):
+    target, add = candidates
+    path = add(0, score, threshold)
+    health = "ready" if score < cutoff else "collapsed"
+    for allow_unhealthy in (False, True):
+        status = assert_policy_matches_discovery(target, allow_unhealthy=allow_unhealthy)
+        assert status == {"status": health, "score": score, "seed": 0,
+                          "checkpoint": str(path),
+                          "selectable": health == "ready" or allow_unhealthy}
+
+
 @pytest.mark.parametrize("summary", [None, "not JSON", '{"score": "unknown"}', '{"other": 0.01}'])
 def test_missing_or_invalid_summary_stays_unverified(candidates, summary):
     target, add = candidates

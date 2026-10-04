@@ -43,6 +43,8 @@ def seed_score(seed_dir):
 
     try:
         blob = json.loads(summary_path.read_text())
+        if isinstance(blob["score"], bool):
+            return float("inf")
         score = float(blob["score"])
         return score if math.isfinite(score) else float("inf")
     except Exception:
@@ -64,7 +66,9 @@ def checkpoint_health(seed_dir):
         if isinstance(config, Mapping):
             stop = config.get("stop", {})
             if isinstance(stop, Mapping):
-                threshold = float(stop.get("collapsed_score", threshold))
+                configured_threshold = stop.get("collapsed_score", threshold)
+                if not isinstance(configured_threshold, bool):
+                    threshold = float(configured_threshold)
     except (OSError, ValueError, TypeError, OverflowError):
         pass
     if not math.isfinite(threshold) or threshold <= 0:
