@@ -2,6 +2,7 @@
 
 Verification for the cumulative v2 improvements:
 
+- [CPU battle mask efficiency](battle-mask-efficiency.md): fewer full-state passes, exact layout fallbacks, paired benchmarks and resource checks
 - [Bounded endurance](endurance.md): long-run reproducibility, repeated lifecycle checks and sampled resource stability
 - [Declared dependency floor](minimum-dependencies.md): exact minimum runtime stack and final suites on Python 3.11, 3.12 and 3.13
 - [Frozen-board rendering](frozen-board-rendering.md): exact paused-raster reuse, paired timing controls and fresh Python 3.13 verification

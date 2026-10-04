@@ -214,6 +214,8 @@ Ordinary CPU inference now reuses the first convolution's temporary activation f
 
 Paused fields now reuse one scaled image only while its final pixels and size stay identical. This reduced warm, settled paused-lab drawing time by about **10–16%** in measured SDL runs; live frames retain the original rendering path. Editing, easing, effects and resize behavior remain pixel-exact. See the [frozen-board rendering and Python 3.13 verification](verification/frozen-board-rendering.md).
 
+Hard-mode CPU battle filtering now combines cell masks before touching every state channel and uses an equivalent reduced finite-cell check. Against the already-optimized main baseline, this reduced median tick time by **9.5–13.5%** across the measured 32–96 grids, with exact state, RNG and scoring checks. Unusual tensor layouts retain the original masking path. See the [battle mask benchmark and verification](verification/battle-mask-efficiency.md) for negative controls, memory limits and three-version checks.
+
 ## Training and checkpoint portability
 
 ```bash
