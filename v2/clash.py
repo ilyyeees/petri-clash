@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import os
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-import pygame
 import torch
 
 from nca import NCA, make_seed, pick_device
@@ -230,6 +229,7 @@ def reset_world(size, device, left_bundle, right_bundle, left_pos=None, right_po
 
 
 def render_surface(state_a, state_b, owner, team_colors=False):
+    import pygame
     rgba = compose_rgba(state_a, state_b, owner)[0].detach().cpu().clamp(0.0, 1.0)
     if team_colors:
         alpha = rgba[3:4]

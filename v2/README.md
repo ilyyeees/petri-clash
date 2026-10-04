@@ -34,11 +34,35 @@ The field takes priority: a larger square board sits beside a compact instrument
 
 ## Read the battle at a glance
 
-The live scoreboard counts **held cells in hard mode** and **living cells in soft mode**. Large exact counters, a lead margin, full-board percentages, and recent net changes make the comparison explicit. Hard-mode grey in the bar is neutral land; the two soft-mode bars independently show each culture’s fraction of the board (which may overlap). A lead is not a declared winner: this is an open-ended arena, not a timed match.
+In the default sandbox, the live scoreboard counts **held cells in hard mode** and **living cells in soft mode**. Large exact counters, a lead margin, full-board percentages, and recent net changes make the comparison explicit. Hard-mode grey in the bar is neutral land; the two soft-mode bars independently show each culture’s fraction of the board (which may overlap). A sandbox lead is not a declared winner; use a seeded duel for a scored round.
 
 Short, time-based visual easing smooths the board without changing cell ownership, model state, the RNG, or simulation ticks. Land and pressure share the left-green/right-coral palette. Changing views, replaying, or editing snaps to the correct new board instead of blending unrelated states.
 
 Damage creates a crater pulse and reports the exact number of living cells erased on each side. Planting creates a side-colored seed marker, and the action result remains below the board. Effects use wall time and finish even while paused; scores update immediately. Use **F / FX ON-OFF** or `--reduced-motion` to disable easing and moving effects. Recent score deltas are observed net changes, not guessed kill/capture attribution, and cover the displayed number of simulation ticks.
+
+## Seeded duels
+
+Press **D / START DUEL** for a complete round, or launch with `--duel`. The default round runs for **600 simulation ticks**: 60 ticks of unscored growth, then 540 scoring ticks. Every scoring tick adds each side's held cells in hard mode, or living cells in soft mode. The higher integer total wins; an exact tie is a draw. The HUD shows the average across scored ticks, current cells, and ticks remaining. The result also shows the exact **cell-tick** totals: scoring rewards sustained growth rather than only the final board.
+
+- Pausing stops the round clock. Speed changes only how quickly those same ticks play; they do not change the scoring window.
+- Default starts are mirrored horizontally with equal border distances. Explicit `--left-pos` / `--right-pos` overrides are allowed and reported as custom placement.
+- Planting, damage, and clearing are locked during a duel, including after it ends. Return to **LAB** to edit freely. Changing culture or hard/soft rules begins a fresh round.
+- A completed round freezes its simulation and score. **R / Enter / REMATCH** repeats the same seed; **NEXT SEED** advances the seed for another round. **D / BACK TO LAB** starts a fresh sandbox.
+- **HIDE / RESULT** closes and reopens the result panel, so you can inspect the frozen board in any view without losing the outcome.
+- Soft duels compare independent growth; they do not capture territory, and living cells can overlap. These are shape-growing cultures with different sizes and strengths, not balanced competitive agents. A duel win is an arena outcome, not a model-quality ranking.
+- Non-finite state invalidates the round without awarding a winner.
+
+```bash
+python v2/clash.py --device cpu --duel --seed 42
+python v2/clash.py --device cpu --duel --round-ticks 300 --warmup-ticks 30 \
+  --headless-frames 300 --report duel.json --snapshot duel.png
+```
+
+The sandbox remains the default. Custom rounds require `0 <= warmup-ticks < round-ticks`. Headless requests shorter than the round produce an in-progress score; larger requests stop at the round's exact endpoint. The report includes phase, scored ticks, integer totals, averages, winner, and placement type.
+
+See the [duel verification report](verification/duels.md) for screenshots, regression coverage, and measured CPU cost.
+
+This addition applies the explicit-objective and readable-outcome direction of [Subset's Into the Breach](https://www.subsetgames.com/itb.html), with a one-action start/rematch following the [Game Accessibility Guidelines' quick-start recommendation](https://gameaccessibilityguidelines.com/allow-the-game-to-be-started-without-the-need-to-navigate-through-multiple-levels-of-menus/). The cellular simulation remains Petri Clash's own; it does not imitate turn-based combat or promise perfect information.
 
 ## The upgraded rules
 
@@ -53,6 +77,9 @@ Soft mode keeps both organisms independent. Switch modes with **M** or the mode 
 | Pause / resume | Space or PAUSE |
 | Advance one tick and pause | N or STEP |
 | Replay the same seed | R or RESET |
+| Start a duel / return to sandbox | D or START DUEL / BACK TO LAB |
+| Rematch a completed duel | Enter, R or REMATCH |
+| Play a completed duel with the next seed | NEXT SEED |
 | Cycle 1× / 2× / 4× / 8× speed | Tab or speed button |
 | Toggle hard / soft rules and reset | M or mode button |
 | Team colors | T or COLORS |
@@ -76,7 +103,7 @@ python v2/clash.py --device cpu --seed 42 --headless-frames 256 \
 python v2/soft_clash.py --device cpu --headless-frames 256
 ```
 
-`--headless-frames N` advances exactly N simulation ticks. It does not initialize SDL, create a window, render frames, or sleep to hit a frame rate. An optional snapshot renders only the final board via Pillow. `--report` records model sources, seed, rules, cell counts, territory, elapsed time, and device. `--snapshot` in interactive mode captures the complete window on exit. `--ui-frames N` bounds an interactive smoke run.
+`--headless-frames N` advances exactly N simulation ticks in the sandbox, or up to the duel's endpoint when `--duel` is enabled. It does not initialize SDL, create a window, render frames, or sleep to hit a frame rate. An optional snapshot renders only the final board via Pillow. `--report` records model sources, seed, rules, cell counts, territory, elapsed time, device, and duel status. `--snapshot` in interactive mode captures the complete window on exit. `--ui-frames N` bounds an interactive smoke run.
 
 The same seed, model, settings, device, software versions, and action sequence replay the same match. Reset restores the simulation seed. Cross-device or cross-version bitwise equality is not promised. `--left-pos x,y` and `--right-pos x,y` override starting positions; use `--grid-size N` to change the arena size.
 

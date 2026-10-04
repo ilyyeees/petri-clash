@@ -14,6 +14,7 @@ from clash import (V2_ROOT, active_grid_size, clamp, ensure_model, list_targets,
                    parse_grid_pos, reset_world, target_status)
 from runtime import configure_runtime
 from trainer.common import pick_device
+from duel import DuelConfig, DuelRound
 
 
 class Arena:
@@ -24,25 +25,52 @@ class Arena:
         self.left = self.load(self.left_index, args.left_seed)
         self.right = self.load(self.right_index, args.right_seed)
         self.mode = args.mode
+        self.duel_enabled = args.duel
+        self.duel_config = DuelConfig(args.round_ticks, args.warmup_ticks)
         self.steps = 0
         self.reset()
 
     def load(self, index, seed=None):
         key = index, seed
         if key not in self.cache:
-            self.cache[key] = ensure_model(self.targets[index], self.args.device,
-                self.args.bootstrap_steps, preferred_seed=seed,
-                allow_unhealthy=self.args.allow_unhealthy)
+            # NCA construction initializes CPU parameters before weights load.
+            # A malformed checkpoint must not change an ongoing match's RNG
+            # just because the player tried an unavailable culture.
+            with torch.random.fork_rng(devices=[]):
+                self.cache[key] = ensure_model(self.targets[index], self.args.device,
+                    self.args.bootstrap_steps, preferred_seed=seed,
+                    allow_unhealthy=self.args.allow_unhealthy)
         return self.cache[key]
 
     def reset(self):
         # Reset is a replay of this seed. Model loading must not perturb the match RNG.
         configure_runtime(seed=self.args.seed, cpu_threads=self.args.cpu_threads)
         self.size = active_grid_size(self.args.grid_size, self.left, self.right)
+        left_pos, right_pos = self.args.left_pos, self.args.right_pos
+        # Equal border distance removes the sandbox's random placement skew.
+        # Explicit positions remain available for clearly labeled custom rounds.
+        if self.duel_enabled:
+            center, start = (self.size - 1) // 2, self.size // 3
+            left_pos = left_pos or (start, center)
+            right_pos = right_pos or (self.size - 1 - start, center)
         self.a, self.b, self.owner, self.control = reset_world(
             self.size, self.args.device, self.left, self.right,
-            left_pos=self.args.left_pos, right_pos=self.args.right_pos)
+            left_pos=left_pos, right_pos=right_pos)
         self.steps = 0
+        self.start_positions = {
+            side: [int(pos) for pos in state[0, 3].nonzero()[0].flip(0).tolist()]
+            for side, state in (("left", self.a), ("right", self.b))}
+        self.duel = (DuelRound(self.duel_config, mode=self.mode, board_cells=self.size ** 2)
+                     if self.duel_enabled else None)
+
+    def set_duel(self, enabled):
+        """Switch between an editable lab and a fresh scored round."""
+        self.duel_enabled = bool(enabled)
+        self.reset()
+
+    def _require_sandbox(self):
+        if self.duel_enabled:
+            raise ValueError("Duel edits are locked. Switch to LAB to plant, damage, or clear.")
 
     def select(self, index, side):
         bundle = self.load(index, self.args.left_seed if side == 0 else self.args.right_seed)
@@ -53,6 +81,7 @@ class Arena:
         self.reset()
 
     def clear(self):
+        self._require_sandbox()
         self.a = torch.zeros_like(self.a)
         self.b = torch.zeros_like(self.b)
         self.owner = torch.zeros_like(self.owner)
@@ -60,10 +89,12 @@ class Arena:
         self.steps = 0
 
     def damage(self, x, y, radius):
+        self._require_sandbox()
         self.a, self.b, self.owner, self.control = crater(
             self.a, self.b, self.owner, self.control, x, y, radius)
 
     def plant(self, x, y, side):
+        self._require_sandbox()
         x, y = clamp(x, 0, self.size - 1), clamp(y, 0, self.size - 1)
         # Clone because NCA inference returns inference tensors, which cannot be
         # modified outside inference_mode. Planting also clears the opposing spark.
@@ -78,21 +109,49 @@ class Arena:
         self.control[0, 0, y, x] = 1 if side == 0 else -1
 
     def step(self, count=1):
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("step count must be a nonnegative integer")
+        count = self.duel.clip_steps(count) if self.duel else count
+        if self.duel and self.duel.mode != self.mode:
+            raise ValueError("reset the round after changing its mode")
+        advanced = 0
         with torch.inference_mode():
             for _ in range(count):
                 if self.mode == "hard":
-                    self.a, self.b, self.owner, self.control = clash_step(
-                        self.a, self.b, self.owner, self.control,
-                        self.left["model"], self.right["model"],
-                        pressure_gain=self.args.pressure_gain,
-                        control_decay=self.args.control_decay,
-                        capture_threshold=self.args.capture_threshold,
-                        release_threshold=self.args.release_threshold,
-                        tie_margin=self.args.tie_margin)
+                    try:
+                        self.a, self.b, self.owner, self.control = clash_step(
+                            self.a, self.b, self.owner, self.control,
+                            self.left["model"], self.right["model"],
+                            pressure_gain=self.args.pressure_gain,
+                            control_decay=self.args.control_decay,
+                            capture_threshold=self.args.capture_threshold,
+                            release_threshold=self.args.release_threshold,
+                            tie_margin=self.args.tie_margin, strict_finite=bool(self.duel))
+                    except FloatingPointError:
+                        if not self.duel:
+                            raise
+                        # A rejected raw proposal leaves the last valid board
+                        # intact, but the attempted tick invalidates its score.
+                        self.steps += 1
+                        advanced += 1
+                        self.duel.record_tick(self.steps, None, None, finite=False)
+                        break
                 else:
                     self.a = self.left["model"](self.a)
                     self.b = self.right["model"](self.b)
                 self.steps += 1
+                advanced += 1
+                if self.duel:
+                    finite = bool(torch.isfinite(self.a).all() & torch.isfinite(self.b).all()
+                                  & torch.isfinite(self.control).all())
+                    if self.mode == "hard":
+                        left, right = (int((self.owner == side).sum().item()) for side in (1, 2))
+                    else:
+                        left, right = (int((state[:, 3:4] > .1).sum().item()) for state in (self.a, self.b))
+                    self.duel.record_tick(self.steps, left, right, finite=finite)
+                    if self.duel.finished:
+                        break
+        return advanced
 
     def stats(self):
         a, b = self.a[:, 3:4], self.b[:, 3:4]
@@ -131,6 +190,10 @@ class Arena:
                 "steps_per_second": self.steps / elapsed if elapsed > 0 else 0,
                 "left": {k: self.left.get(k) for k in ("name", "source", "seed_dir", "score", "health")},
                 "right": {k: self.right.get(k) for k in ("name", "source", "seed_dir", "score", "health")},
+                "duel": self.duel.snapshot() if self.duel else None,
+                "placement": "custom" if self.args.left_pos or self.args.right_pos else
+                             ("mirrored" if self.duel else "seeded-random"),
+                "starting_positions": self.start_positions,
                 "rules": {k: getattr(self.args, k) for k in ("pressure_gain", "control_decay",
                     "capture_threshold", "release_threshold", "tie_margin")}}
 
@@ -138,6 +201,9 @@ class Arena:
 def parse_args(argv=None, default_mode="hard"):
     parser = argparse.ArgumentParser(description="Petri Clash: a living neural arena. No training required.")
     parser.add_argument("--mode", choices=("hard", "soft"), default=default_mode)
+    parser.add_argument("--duel", action="store_true", help="play a fixed-length scored round with editing locked")
+    parser.add_argument("--round-ticks", type=int, default=600, help="duel length in simulation ticks, including warmup")
+    parser.add_argument("--warmup-ticks", type=int, default=60, help="initial duel growth ticks excluded from scoring")
     parser.add_argument("--grid-size", type=int, default=0, help="0 uses checkpoint grid size")
     parser.add_argument("--window-size", type=int, default=1100, help="window width; minimum 860")
     parser.add_argument("--fps", type=int, default=30)
@@ -161,12 +227,16 @@ def parse_args(argv=None, default_mode="hard"):
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda", "mps"))
     parser.add_argument("--cpu-threads", type=int)
     parser.add_argument("--seed", type=int, default=0, help="replayable simulation RNG seed")
-    parser.add_argument("--headless-frames", type=int, default=0, help="simulate exactly N steps with no SDL, rendering, or FPS sleep")
+    parser.add_argument("--headless-frames", type=int, default=0, help="simulate up to N steps (duels stop at their endpoint), with no SDL or FPS sleep")
     parser.add_argument("--list-models", action="store_true")
     parser.add_argument("--report", type=Path, help="write final machine-readable match report")
     parser.add_argument("--snapshot", type=Path, help="save final PNG (board headlessly; entire interactive window)")
     parser.add_argument("--ui-frames", type=int, default=0, help="exit interactive mode after N frames, useful for UI smoke tests")
     args = parser.parse_args(argv)
+    try:
+        DuelConfig(args.round_ticks, args.warmup_ticks)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.grid_size and args.grid_size < 8:
         parser.error("--grid-size must be 0 or at least 8")
     if args.fps < 1 or args.crater_radius < 1 or args.window_size < 1:
@@ -217,8 +287,12 @@ class ArenaUI:
         self.speed, self.radius = arena.args.steps_per_frame, arena.args.crater_radius
         self.team_colors = arena.args.team_colors
         self.reduced_motion = arena.args.reduced_motion
-        self.message = "Grow. Collide. Regenerate."
+        self.message = "Duel: sustain more cells over time. Pausing freezes the clock." if arena.duel else "Grow. Collide. Regenerate."
         self.buttons = []
+        self.result_buttons = []
+        self.result_rect = None
+        self.stale_result_rect = None
+        self.result_visible = True
         self.board = pygame.Rect(0, 0, 1, 1)
         self.clock = pygame.time.Clock()
         self.stats_cache = arena.stats()
@@ -229,6 +303,7 @@ class ArenaUI:
         self.notices = []
         self.last_draw = time.perf_counter()
         self.elapsed = 0.0
+        self.duel_snapshot = None
         self.refresh(reset=True)
 
     def text(self, text, x, y, size=14, color=TEXT, width=None):
@@ -255,12 +330,18 @@ class ArenaUI:
     def refresh(self, reset=False):
         self.stats_cache = self.arena.stats()
         if reset:
+            if self.result_rect and self.result_visible and self.duel_snapshot and self.duel_snapshot["finished"]:
+                self.stale_result_rect = self.result_rect.copy()
             from feedback import FrameBlend
             self.blend = FrameBlend()
             self.score.reset()
             self.effects.clear()
             self.notices.clear()
+            self.result_visible = True
         self.summary = self.score.update(self.stats_cache)
+        self.duel_snapshot = self.arena.duel.snapshot() if self.arena.duel else None
+        if self.duel_snapshot and self.duel_snapshot["finished"]:
+            self.paused = True
 
     def notice(self, text, color=TEXT):
         self.message = text
@@ -269,6 +350,9 @@ class ArenaUI:
 
     def interact(self, x, y, side=None):
         """Apply one input, then report its real immediate effect, even paused."""
+        if self.arena.duel:
+            self.notice("Duel edits are locked. BACK TO LAB restores planting and damage.", AMBER)
+            return
         from feedback import FrameBlend
         before = self.arena.stats()
         if side is None:
@@ -297,20 +381,33 @@ class ArenaUI:
         self.score_rect = pg.Rect(sx, y, 286, 181)
         hard = self.arena.mode == "hard"
         left, right = self.summary["left"], self.summary["right"]
-        self.text("HELD CELLS" if hard else "LIVING CELLS", sx + 12, y, 12, AMBER)
-        self.text("LIVE" if not self.paused else "PAUSED", sx + 222, y, 11, MUTED)
+        duel = self.duel_snapshot
+        metric = "HELD CELLS" if hard else "LIVING CELLS"
+        self.text(("MEAN " if duel else "") + metric, sx + 12, y, 12, AMBER)
+        state = "FINAL" if duel and duel["finished"] else "PAUSED" if self.paused else "LIVE"
+        self.text(state, sx + 222, y, 11, MUTED)
         for side, value, color in ((0, left, GREEN), (1, right, CORAL)):
             x = sx + 12 + side * 140
             name = (self.arena.left if side == 0 else self.arena.right)["name"].split("_", 1)[-1]
             self.text(f"{'L' if side == 0 else 'R'} / {name.upper()}", x, y + 24, 12, color, 126)
-            size = 36 if self.fonts[36].size(f"{value:,}")[0] <= 126 else 28
-            self.text(f"{value:,}", x - 2, y + 40, size, color, 128)
+            average = duel["averages"]["left" if side == 0 else "right"] if duel else None
+            number = (f"{average:,.1f}" if average is not None else "—") if duel else f"{value:,}"
+            size = 36 if self.fonts[36].size(number)[0] <= 126 else 28
+            self.text(number, x - 2, y + 40, size, color, 128)
             alive = st["left_alive" if side == 0 else "right_alive"]
             pct = self.summary["percent"]["left" if side == 0 else "right"]
-            self.text(f"{pct:.1f}% held" if hard else f"{pct:.1f}% alive", x, y + 83, 13, MUTED)
-            self.text(f"{alive} living cells", x, y + 100, 13, MUTED, 128)
-        self.text(self.summary["headline"], sx + 12, y + 124, 16, TEXT, 262)
-        self.text(self.summary["trend"] if self.summary["span"] else "Open-ended / no final winner", sx + 12, y + 146, 11, MUTED, 262)
+            self.text(f"{value:,} now" if duel else f"{pct:.1f}% held" if hard else f"{pct:.1f}% alive", x, y + 83, 13, MUTED)
+            self.text(f"{duel['scored_ticks']} scored ticks" if duel else f"{alive} living cells", x, y + 100, 13, MUTED, 128)
+        if duel:
+            headline = self.duel_headline()
+            detail = ("Growth warmup / no points yet" if duel["phase"] == "warmup" else
+                      "Equal cell-ticks = draw" if duel["winner"] == "draw" else
+                      "Winner: most cell-ticks held" if hard else "Winner: most living cell-ticks")
+        else:
+            headline = self.summary["headline"]
+            detail = self.summary["trend"] if self.summary["span"] else "Open-ended / no final winner"
+        self.text(headline, sx + 12, y + 124, 16, TEXT, 262)
+        self.text(detail, sx + 12, y + 146, 11, MUTED, 262)
         total, bar_width = self.arena.size ** 2, 262
         self.score_bars = []
         if hard:
@@ -330,6 +427,65 @@ class ArenaUI:
                 filled = round(bar_width * value / total)
                 if filled:
                     pg.draw.rect(self.window, color, (bar.x, bar.y, filled, 4))
+
+    def duel_headline(self):
+        duel = self.duel_snapshot
+        if duel["phase"] == "invalid":
+            return "ROUND INVALID"
+        if duel["finished"]:
+            return "ROUND DRAW" if duel["winner"] == "draw" else f"{duel['winner'].upper()} WINS ROUND"
+        if duel["phase"] == "warmup":
+            return f"WARMUP / {duel['warmup_remaining_ticks']} LEFT"
+        return f"{duel['remaining_ticks']} TICKS REMAIN"
+
+    def draw_duel(self):
+        """A small progress track, then a result that never hides its metric."""
+        duel, pg = self.duel_snapshot, self.pg
+        self.result_buttons = []
+        if not duel:
+            self.result_rect = None
+            return
+        track = pg.Rect(self.board.x + 12, self.board.bottom - 10, self.board.width - 24, 3)
+        pg.draw.rect(self.window, BORDER, track)
+        progress = round(track.width * duel["tick"] / duel["total_ticks"])
+        if progress:
+            pg.draw.rect(self.window, AMBER, (track.x, track.y, progress, track.height))
+        if not duel["finished"] or not self.result_visible:
+            self.result_rect = None
+            return
+        width = min(440, self.board.width - 32)
+        self.result_rect = pg.Rect(0, 0, width, 258)
+        self.result_rect.center = self.board.center
+        rect = self.result_rect
+        shadow = pg.Surface((rect.width + 12, rect.height + 12), pg.SRCALPHA)
+        shadow.fill((0, 0, 0, 100))
+        self.window.blit(shadow, (rect.x - 6, rect.y - 6))
+        pg.draw.rect(self.window, PANEL, rect)
+        pg.draw.rect(self.window, BORDER, rect, 1)
+        pg.draw.line(self.window, AMBER, rect.topleft, rect.topright, 3)
+        x, y = rect.x + 22, rect.y + 18
+        self.text("SEEDED DUEL / FINAL", x, y, 12, AMBER)
+        color = GREEN if duel["winner"] == "left" else CORAL if duel["winner"] == "right" else TEXT
+        self.text(self.duel_headline(), x, y + 27, 28, color, width - 44)
+        if duel["valid"]:
+            self.text("AVERAGE " + duel["metric"].upper(), x, y + 73, 12, MUTED)
+            self.text(f"L {duel['averages']['left']:,.2f}   /   R {duel['averages']['right']:,.2f}",
+                      x, y + 96, 22, TEXT, width - 44)
+            self.text(f"Cell-ticks: L {duel['scores']['left']:,} / R {duel['scores']['right']:,}",
+                      x, y + 130, 12, MUTED, width - 44)
+            self.text(f"Ticks {duel['warmup_ticks'] + 1}–{duel['total_ticks']} scored. Most wins; equal is a draw.",
+                      x, y + 151, 11, MUTED, width - 44)
+        else:
+            self.text("Non-finite state. No winner awarded.", x, y + 87, 14, CORAL, width - 44)
+            self.text("Try a healthy culture or another seed.", x, y + 112, 13, MUTED, width - 44)
+        button_width = (width - 60) // 3
+        start = len(self.buttons)
+        self.button((rect.right - 72, rect.y + 13, 56, 23), "HIDE", "result")
+        for i, (label, action) in enumerate((("REMATCH / R", "reset"), ("NEXT SEED", "next_seed"), ("BACK TO LAB", "duel"))):
+            self.button((x + i * (button_width + 8), rect.bottom - 43, button_width, 28), label, action,
+                        active=i == 0)
+        self.result_buttons = self.buttons[start:]
+        del self.buttons[start:]
 
     def draw_effects(self):
         pg, arena = self.pg, self.arena
@@ -374,6 +530,7 @@ class ArenaUI:
         w, h = self.window.get_size()
         self.window.fill(BG)
         self.buttons = []
+        self.stale_result_rect = None
         sidebar, by, gap = 286, 110, 16
         size = max(1, min(w - sidebar - 56, h - by - 52))
         bx = max(20, (w - size - gap - sidebar) // 2)
@@ -381,12 +538,18 @@ class ArenaUI:
         self.rail_x = sx
         self.board = pg.Rect(bx, by, size, size)
         self.text("PETRI CLASH", bx, 13, 28)
-        self.text("NEURAL GROWTH SANDBOX", bx + 1, 49, 11, MUTED)
+        subtitle = "SEEDED DUEL / SUSTAIN MORE LIFE" if arena.duel and arena.mode == "soft" else \
+                   "SEEDED DUEL / HOLD MORE LAND" if arena.duel else "NEURAL GROWTH SANDBOX"
+        self.text(subtitle, bx + 1, 49, 11, MUTED)
+        self.button((self.board.right - 110, 22, 110, 27),
+                    "BACK TO LAB" if arena.duel else "START DUEL", "duel", bool(arena.duel))
         self.text(f"SEED {arena.args.seed:03d}", sx + 12, 23, 12, AMBER)
         self.text(f"TICK {arena.steps:05d} / {self.current_fps:.0f} FPS", sx + 12, 47, 11, MUTED)
         x = bx
+        finished = bool(arena.duel and arena.duel.finished)
         for width, label, action, active in (
-            (74, "RESUME" if self.paused else "PAUSE", "pause", self.paused),
+            (74, "RESULT" if finished else "RESUME" if self.paused else "PAUSE",
+             "result" if finished else "pause", self.result_visible if finished else self.paused),
             (68, "REPLAY", "reset", False), (48, "STEP", "step", False),
             (42, f"{self.speed}x", "speed", False),
             (66, "HARD" if arena.mode == "hard" else "SOFT", "mode", True),
@@ -409,12 +572,13 @@ class ArenaUI:
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x + dx * 7, corner_y), 1)
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x, corner_y + dy * 7), 1)
         mouse = pg.mouse.get_pos()
-        if self.board.collidepoint(mouse):
+        if self.board.collidepoint(mouse) and not arena.duel:
             planting = bool(pg.key.get_mods() & pg.KMOD_SHIFT)
             radius = max(3, round((1 if planting else self.radius) * self.board.width / arena.size))
             pg.draw.circle(self.window, GREEN if planting else AMBER, mouse, radius, 1)
         # Inset labels identify the field without a rounded dashboard badge.
-        label = "PAUSED / N TO STEP" if self.paused else f"{self.view.upper()} / {arena.mode.upper()}"
+        label = (self.duel_headline() if arena.duel else
+                 "PAUSED / N TO STEP" if self.paused else f"{self.view.upper()} / {arena.mode.upper()}")
         self.text(label, self.board.x + 12, self.board.y + 11, 11, AMBER if self.paused else MUTED)
         size_label = f"{arena.size} x {arena.size}"
         self.text(size_label, self.board.right - self.fonts[11].size(size_label)[0] - 12,
@@ -424,6 +588,7 @@ class ArenaUI:
         pg.draw.line(self.window, (81, 89, 90), (sx, 100), (sx + sidebar, 100))
         self.draw_score(w)
         self.draw_sidebar(sx, 308, sidebar)
+        self.draw_duel()
         self.draw_underboard()
         pg.display.flip()
 
@@ -434,7 +599,8 @@ class ArenaUI:
             self.text(text, x, y, 12, color, width)
         else:
             no_life = not self.stats_cache["left_alive"] and not self.stats_cache["right_alive"]
-            status = self.summary["status"] if no_life or not self.stats_cache["finite"] else self.message
+            status = ("Round frozen. RESULT shows the score; R / Enter replays this seed." if self.duel_snapshot and self.duel_snapshot["finished"] else
+                      self.summary["status"] if no_life or not self.stats_cache["finite"] else self.message)
             self.text(status, x, y, 12, TEXT, width)
         st = self.stats_cache
         neutral = self.arena.size ** 2 - (st["left_territory"] or 0) - (st["right_territory"] or 0)
@@ -477,11 +643,15 @@ class ArenaUI:
         y += 42
         rules = (["Held land sets the lead. Pressure", "claims it; dead land turns neutral."] if arena.mode == "hard" else
                  ["Living cells set the comparison.", "Independent growth; no land capture."])
+        if arena.duel:
+            rules = ["Each scored tick adds held cells." if arena.mode == "hard" else "Scored ticks add living cells.",
+                     f"First {arena.duel_config.warmup_ticks} ticks: growth warmup."]
         for i, text in enumerate(rules):
             self.text(text, sx + 12, y + i * 18, 13, MUTED, 262)
-        self.text(f"Click: damage [{self.radius}]  /  [ ]: size", sx + 12, y + 46, 13, TEXT, 262)
-        self.text("Shift-click: L seed / Right: R seed", sx + 12, y + 63, 13, TEXT, 262)
-        self.text("Space: pause / N: step / C: clear", sx + 12, y + 80, 13, TEXT, 262)
+        help_lines = (["Edits locked / D: return to lab", "Cultures start a new round.", "Space: pause / N: step / R: rematch"] if arena.duel else
+                      [f"Click: damage [{self.radius}]  /  [ ]: size", "Shift-click: L seed / Right: R seed", "Space: pause / N: step / C: clear"])
+        for i, line in enumerate(help_lines):
+            self.text(line, sx + 12, y + 46 + i * 17, 13, TEXT, 262)
 
     def action(self, action):
         arena = self.arena
@@ -498,6 +668,8 @@ class ArenaUI:
             else:
                 try:
                     arena.select(action[1], self.side)
+                    if arena.duel:
+                        self.paused = False
                     self.refresh(reset=True)
                     self.notice("Culture loaded. Replaying the same seed.")
                 except (ValueError, RuntimeError, OSError) as exc:
@@ -510,24 +682,53 @@ class ArenaUI:
             self.refresh()
             return
         if action == "pause":
+            if arena.duel and arena.duel.finished:
+                self.notice("Round complete. R replays this seed; NEXT SEED starts another.", AMBER)
+                return
             self.paused = not self.paused
-            self.notice("Paused. Editing still works; N advances one tick." if self.paused else "Simulation resumed.")
+            self.notice(("Paused. N advances one tick; duel edits stay locked." if arena.duel else
+                         "Paused. Editing still works; N advances one tick.") if self.paused else "Simulation resumed.")
         elif action == "reset":
             arena.reset()
+            if arena.duel:
+                self.paused = False
             reset = True
             self.message = "Replaying the same seed."
+        elif action == "duel":
+            arena.set_duel(not arena.duel_enabled)
+            self.paused, reset = False, True
+            self.message = ("Duel started. Hold more land over time; edits are locked." if arena.mode == "hard" else
+                            "Growth duel started. Sustain more living cells; edits are locked.") if arena.duel else \
+                           "Back in the lab. Plant, damage, and explore freely."
+        elif action == "next_seed":
+            if not arena.duel or not arena.duel.finished:
+                return
+            arena.args.seed = (arena.args.seed + 1) % (2 ** 32)
+            arena.reset()
+            self.paused, reset = False, True
+            self.message = f"New duel / seed {arena.args.seed}."
+        elif action == "result":
+            if arena.duel and arena.duel.finished:
+                self.result_visible = not self.result_visible
+                if not self.result_visible and self.result_rect:
+                    self.stale_result_rect = self.result_rect.copy()
         elif action == "step":
             self.paused = True
-            arena.step()
-            self.notice("Advanced exactly one simulation tick.")
+            advanced = arena.step()
+            self.notice("Advanced exactly one simulation tick." if advanced else "Round complete. R starts a rematch.")
         elif action == "speed":
             self.speed = 1 if self.speed == 8 else self.speed * 2
         elif action == "mode":
             arena.mode = "soft" if arena.mode == "hard" else "hard"
             arena.reset()
+            if arena.duel:
+                self.paused = False
             self.view, reset = "organisms", True
             self.message = f"{arena.mode.title()} rules. Replaying the same seed."
         elif action == "clear":
+            if arena.duel:
+                self.notice("Duel edits are locked. BACK TO LAB restores planting and damage.", AMBER)
+                return
             arena.clear()
             reset = True
             self.message = "Arena cleared. Shift-click or right-click to plant new life."
@@ -548,7 +749,10 @@ class ArenaUI:
             self.draw(dt=0)  # Subsequent clicks in this event batch use current geometry.
         if event.type == pg.KEYDOWN:
             mapping = {pg.K_SPACE: "pause", pg.K_r: "reset", pg.K_n: "step", pg.K_c: "clear",
-                       pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed", pg.K_f: "motion"}
+                       pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed", pg.K_f: "motion",
+                       pg.K_d: "duel"}
+            if event.key == pg.K_RETURN and arena.duel and arena.duel.finished:
+                self.action("reset")
             if event.key in mapping:
                 self.action(mapping[event.key])
             elif event.key in (pg.K_LEFTBRACKET, pg.K_RIGHTBRACKET):
@@ -559,6 +763,18 @@ class ArenaUI:
                     self.side = 1 if event.mod & pg.KMOD_SHIFT else 0
                     self.action(("target", index))
         if event.type == pg.MOUSEBUTTONDOWN:
+            if self.stale_result_rect and self.stale_result_rect.collidepoint(event.pos):
+                return True  # Never click through a dismissed result in this event batch.
+            if event.button == 1:
+                controls = (self.result_buttons + self.buttons
+                            if arena.duel and arena.duel.finished and self.result_visible else self.buttons)
+                for rect, action in controls:
+                    if rect.collidepoint(event.pos):
+                        old_result = self.result_rect.copy() if self.result_rect and self.result_visible else None
+                        self.action(action)
+                        if old_result and (not arena.duel or not arena.duel.finished or not self.result_visible):
+                            self.stale_result_rect = old_result
+                        return True
             if self.board.collidepoint(event.pos):
                 x = clamp(int((event.pos[0] - self.board.x) * arena.size / self.board.width), 0, arena.size - 1)
                 y = clamp(int((event.pos[1] - self.board.y) * arena.size / self.board.height), 0, arena.size - 1)
@@ -568,11 +784,6 @@ class ArenaUI:
                     self.interact(x, y, 0)
                 elif event.button == 1:
                     self.interact(x, y)
-            elif event.button == 1:
-                for rect, action in self.buttons:
-                    if rect.collidepoint(event.pos):
-                        self.action(action)
-                        break
         return True
 
     def run(self):
@@ -632,6 +843,8 @@ def main(argv=None, default_mode="hard"):
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     print(json.dumps(report, indent=2, allow_nan=False))
+    if report["duel"] and not report["duel"]["valid"]:
+        raise SystemExit(report["duel"]["invalid_reason"])
     if not report["finite"]:
         raise SystemExit("Simulation produced non-finite state; check the selected checkpoints.")
 
