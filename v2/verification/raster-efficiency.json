@@ -1,0 +1,1716 @@
+{
+  "schema_version": 1,
+  "benchmark": "petri-clash-raster-ui-sdl-dummy",
+  "baseline_commit": "a31d6c84ae3cd3d77f7436e54b4d1e817f5f14f5",
+  "synthetic_models": false,
+  "scope": "Shipped heart/star checkpoints on CPU with one Torch thread. SDL dummy raster only; no native display, compositor, vsync, event handling or FPS pacing. No action effects are active. Both revisions draw the exact same scene. Version, size and speed order alternate. Samples exclude loading and warmup.",
+  "configuration": {
+    "frames_per_trial": 30,
+    "repeats": 4,
+    "warmup_steps": 20,
+    "draw_warmup_frames": 10,
+    "micro_samples": 300,
+    "window_widths": [
+      1100,
+      860
+    ],
+    "speeds": [
+      1,
+      8
+    ],
+    "seed": 42
+  },
+  "versions": {
+    "python": "3.12.14",
+    "torch": "2.14.1+cpu",
+    "pygame": "2.6.1",
+    "numpy": "2.3.5"
+  },
+  "simulation_tensors_identical": true,
+  "rng_states_identical": true,
+  "final_screen_pixels_identical": true,
+  "summary": [
+    {
+      "width": 1100,
+      "speed": 1,
+      "version": "before",
+      "empty_effects": {
+        "p50_ms": 0.36616150000000003,
+        "p95_ms": 0.527512,
+        "mean_ms": 0.3932069066666667
+      },
+      "sidebar": {
+        "p50_ms": 0.436412,
+        "p95_ms": 0.5859616,
+        "mean_ms": 0.4613236283333333
+      },
+      "simulation": {
+        "p50_ms": 6.0897385,
+        "p95_ms": 7.9533359,
+        "mean_ms": 6.389324358333332
+      },
+      "draw": {
+        "p50_ms": 3.5213355,
+        "p95_ms": 4.379576699999999,
+        "mean_ms": 3.6002821916666665
+      },
+      "total": {
+        "p50_ms": 9.7957115,
+        "p95_ms": 11.600121099999999,
+        "mean_ms": 9.98960655
+      }
+    },
+    {
+      "width": 1100,
+      "speed": 1,
+      "version": "after",
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.000211,
+        "mean_ms": 0.000183225
+      },
+      "sidebar": {
+        "p50_ms": 0.397529,
+        "p95_ms": 0.4747165,
+        "mean_ms": 0.4097705558333333
+      },
+      "simulation": {
+        "p50_ms": 5.6373175,
+        "p95_ms": 6.3685664,
+        "mean_ms": 5.7364844999999995
+      },
+      "draw": {
+        "p50_ms": 2.8655470000000003,
+        "p95_ms": 3.2780327,
+        "mean_ms": 2.9309362583333334
+      },
+      "total": {
+        "p50_ms": 8.531585,
+        "p95_ms": 9.5285268,
+        "mean_ms": 8.667420758333332
+      }
+    },
+    {
+      "width": 1100,
+      "speed": 8,
+      "version": "before",
+      "empty_effects": {
+        "p50_ms": 0.365255,
+        "p95_ms": 0.45136899999999996,
+        "mean_ms": 0.39902805333333335
+      },
+      "sidebar": {
+        "p50_ms": 0.43213100000000004,
+        "p95_ms": 0.51267155,
+        "mean_ms": 0.44430355916666664
+      },
+      "simulation": {
+        "p50_ms": 43.760521499999996,
+        "p95_ms": 45.9656139,
+        "mean_ms": 43.963452925
+      },
+      "draw": {
+        "p50_ms": 3.541705,
+        "p95_ms": 3.8461669499999998,
+        "mean_ms": 3.5702702833333335
+      },
+      "total": {
+        "p50_ms": 47.329423,
+        "p95_ms": 49.5399735,
+        "mean_ms": 47.533723208333335
+      }
+    },
+    {
+      "width": 1100,
+      "speed": 8,
+      "version": "after",
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.000231,
+        "mean_ms": 0.00018615916666666666
+      },
+      "sidebar": {
+        "p50_ms": 0.393953,
+        "p95_ms": 0.45728164999999993,
+        "mean_ms": 0.40473907416666666
+      },
+      "simulation": {
+        "p50_ms": 44.38315849999999,
+        "p95_ms": 50.94718915,
+        "mean_ms": 45.31070960833333
+      },
+      "draw": {
+        "p50_ms": 3.105963,
+        "p95_ms": 3.5839271,
+        "mean_ms": 3.1775643083333334
+      },
+      "total": {
+        "p50_ms": 47.598619,
+        "p95_ms": 54.002087599999996,
+        "mean_ms": 48.488273916666664
+      }
+    },
+    {
+      "width": 860,
+      "speed": 1,
+      "version": "before",
+      "empty_effects": {
+        "p50_ms": 0.17721150000000002,
+        "p95_ms": 0.21930845,
+        "mean_ms": 0.18709165416666668
+      },
+      "sidebar": {
+        "p50_ms": 0.43013250000000003,
+        "p95_ms": 0.51944945,
+        "mean_ms": 0.443006785
+      },
+      "simulation": {
+        "p50_ms": 5.630395,
+        "p95_ms": 6.87941545,
+        "mean_ms": 5.7985239
+      },
+      "draw": {
+        "p50_ms": 2.619891,
+        "p95_ms": 3.0321804500000002,
+        "mean_ms": 2.703879425
+      },
+      "total": {
+        "p50_ms": 8.278631,
+        "p95_ms": 10.1950877,
+        "mean_ms": 8.502403325
+      }
+    },
+    {
+      "width": 860,
+      "speed": 1,
+      "version": "after",
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.000221,
+        "mean_ms": 0.00018181500000000002
+      },
+      "sidebar": {
+        "p50_ms": 0.391104,
+        "p95_ms": 0.49248555,
+        "mean_ms": 0.40820252749999997
+      },
+      "simulation": {
+        "p50_ms": 5.7550349999999995,
+        "p95_ms": 7.2445596,
+        "mean_ms": 5.963711191666667
+      },
+      "draw": {
+        "p50_ms": 2.4150774999999998,
+        "p95_ms": 3.0717014999999996,
+        "mean_ms": 2.5301387083333333
+      },
+      "total": {
+        "p50_ms": 8.184582500000001,
+        "p95_ms": 10.03719195,
+        "mean_ms": 8.493849899999999
+      }
+    },
+    {
+      "width": 860,
+      "speed": 8,
+      "version": "before",
+      "empty_effects": {
+        "p50_ms": 0.1767765,
+        "p95_ms": 0.22530804999999998,
+        "mean_ms": 0.18816454666666668
+      },
+      "sidebar": {
+        "p50_ms": 0.42578099999999997,
+        "p95_ms": 0.5133411,
+        "mean_ms": 0.44414632416666666
+      },
+      "simulation": {
+        "p50_ms": 44.835568499999994,
+        "p95_ms": 49.798295849999995,
+        "mean_ms": 45.448594924999995
+      },
+      "draw": {
+        "p50_ms": 2.8930575000000003,
+        "p95_ms": 3.2674614999999987,
+        "mean_ms": 3.1139408000000004
+      },
+      "total": {
+        "p50_ms": 47.8245415,
+        "p95_ms": 53.135208799999994,
+        "mean_ms": 48.562535725
+      }
+    },
+    {
+      "width": 860,
+      "speed": 8,
+      "version": "after",
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.00022004999999999995,
+        "mean_ms": 0.00018373666666666669
+      },
+      "sidebar": {
+        "p50_ms": 0.392762,
+        "p95_ms": 0.4930731499999999,
+        "mean_ms": 0.40927186499999996
+      },
+      "simulation": {
+        "p50_ms": 44.941945000000004,
+        "p95_ms": 48.3409894,
+        "mean_ms": 45.2189488
+      },
+      "draw": {
+        "p50_ms": 2.6537075000000003,
+        "p95_ms": 3.1970484499999996,
+        "mean_ms": 2.7287101916666665
+      },
+      "total": {
+        "p50_ms": 47.624068,
+        "p95_ms": 51.35252885,
+        "mean_ms": 47.94765899166667
+      }
+    }
+  ],
+  "runs": [
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 0,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.370884,
+        "p95_ms": 0.5472198000000001,
+        "mean_ms": 0.4020466733333333
+      },
+      "sidebar": {
+        "p50_ms": 0.4431475,
+        "p95_ms": 0.6341569500000002,
+        "mean_ms": 0.4686802633333334
+      },
+      "simulation": {
+        "p50_ms": 7.249619,
+        "p95_ms": 8.627552099999997,
+        "mean_ms": 7.448555066666667
+      },
+      "draw": {
+        "p50_ms": 3.5708805,
+        "p95_ms": 4.242043399999999,
+        "mean_ms": 3.6708787666666667
+      },
+      "total": {
+        "p50_ms": 10.9875595,
+        "p95_ms": 12.752599099999996,
+        "mean_ms": 11.119433833333334
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 0,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.000211,
+        "mean_ms": 0.00018048666666666666
+      },
+      "sidebar": {
+        "p50_ms": 0.39751400000000003,
+        "p95_ms": 0.46345410000000004,
+        "mean_ms": 0.40698604666666666
+      },
+      "simulation": {
+        "p50_ms": 5.525436,
+        "p95_ms": 5.96992505,
+        "mean_ms": 5.629568666666667
+      },
+      "draw": {
+        "p50_ms": 2.842613,
+        "p95_ms": 3.17154095,
+        "mean_ms": 2.8851574333333336
+      },
+      "total": {
+        "p50_ms": 8.4409745,
+        "p95_ms": 8.941187249999999,
+        "mean_ms": 8.5147261
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 0,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.36534,
+        "p95_ms": 0.43116865,
+        "mean_ms": 0.3765059733333333
+      },
+      "sidebar": {
+        "p50_ms": 0.435381,
+        "p95_ms": 0.49682970000000004,
+        "mean_ms": 0.4434926966666667
+      },
+      "simulation": {
+        "p50_ms": 43.502883499999996,
+        "p95_ms": 44.96738035,
+        "mean_ms": 43.7496119
+      },
+      "draw": {
+        "p50_ms": 3.5617085,
+        "p95_ms": 3.8693464499999997,
+        "mean_ms": 3.604974666666666
+      },
+      "total": {
+        "p50_ms": 47.090607000000006,
+        "p95_ms": 48.8461978,
+        "mean_ms": 47.35458656666666
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 0,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.00023,
+        "mean_ms": 0.00018400333333333334
+      },
+      "sidebar": {
+        "p50_ms": 0.3719605,
+        "p95_ms": 0.4259828500000001,
+        "mean_ms": 0.38100942666666665
+      },
+      "simulation": {
+        "p50_ms": 43.442355500000005,
+        "p95_ms": 47.9706659,
+        "mean_ms": 44.01823583333334
+      },
+      "draw": {
+        "p50_ms": 3.0410245,
+        "p95_ms": 3.17348755,
+        "mean_ms": 3.0609442666666675
+      },
+      "total": {
+        "p50_ms": 46.444273499999994,
+        "p95_ms": 51.2212792,
+        "mean_ms": 47.079180099999995
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 1,
+      "repeat": 0,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.179701,
+        "p95_ms": 0.2231131,
+        "mean_ms": 0.18695569
+      },
+      "sidebar": {
+        "p50_ms": 0.42324799999999996,
+        "p95_ms": 0.4664933500000001,
+        "mean_ms": 0.43281241333333337
+      },
+      "simulation": {
+        "p50_ms": 5.535565,
+        "p95_ms": 6.211575099999998,
+        "mean_ms": 5.640288000000001
+      },
+      "draw": {
+        "p50_ms": 2.6337175,
+        "p95_ms": 2.8926129,
+        "mean_ms": 2.6574524999999993
+      },
+      "total": {
+        "p50_ms": 8.202083,
+        "p95_ms": 8.930262749999999,
+        "mean_ms": 8.2977405
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 1,
+      "repeat": 0,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.00022,
+        "mean_ms": 0.00018031666666666667
+      },
+      "sidebar": {
+        "p50_ms": 0.384344,
+        "p95_ms": 0.41726475,
+        "mean_ms": 0.37967921
+      },
+      "simulation": {
+        "p50_ms": 5.572331,
+        "p95_ms": 6.218744,
+        "mean_ms": 5.668608066666668
+      },
+      "draw": {
+        "p50_ms": 2.348248,
+        "p95_ms": 2.5692664499999998,
+        "mean_ms": 2.3730203333333337
+      },
+      "total": {
+        "p50_ms": 7.9328725,
+        "p95_ms": 8.76796385,
+        "mean_ms": 8.0416284
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 8,
+      "repeat": 0,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.176145,
+        "p95_ms": 0.20559055,
+        "mean_ms": 0.18239879
+      },
+      "sidebar": {
+        "p50_ms": 0.4215,
+        "p95_ms": 0.49787850000000006,
+        "mean_ms": 0.4379832666666667
+      },
+      "simulation": {
+        "p50_ms": 44.424972499999996,
+        "p95_ms": 53.432033749999995,
+        "mean_ms": 45.82173363333333
+      },
+      "draw": {
+        "p50_ms": 2.8982915,
+        "p95_ms": 4.363914049999998,
+        "mean_ms": 3.6269666000000007
+      },
+      "total": {
+        "p50_ms": 47.64538,
+        "p95_ms": 59.401750099999994,
+        "mean_ms": 49.44870023333335
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 8,
+      "repeat": 0,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.00021,
+        "mean_ms": 0.00017944
+      },
+      "sidebar": {
+        "p50_ms": 0.3946945,
+        "p95_ms": 0.48778305,
+        "mean_ms": 0.40794009999999997
+      },
+      "simulation": {
+        "p50_ms": 44.499025,
+        "p95_ms": 47.81112354999999,
+        "mean_ms": 45.0116144
+      },
+      "draw": {
+        "p50_ms": 2.5959455,
+        "p95_ms": 3.1534287499999993,
+        "mean_ms": 2.682837166666667
+      },
+      "total": {
+        "p50_ms": 47.352088499999994,
+        "p95_ms": 50.388208199999994,
+        "mean_ms": 47.69445156666667
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 8,
+      "repeat": 1,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.0001755,
+        "p95_ms": 0.0002214500000000001,
+        "mean_ms": 0.0001855066666666667
+      },
+      "sidebar": {
+        "p50_ms": 0.3903335,
+        "p95_ms": 0.47834080000000007,
+        "mean_ms": 0.40492353666666675
+      },
+      "simulation": {
+        "p50_ms": 44.933034,
+        "p95_ms": 48.761826649999996,
+        "mean_ms": 45.508766133333324
+      },
+      "draw": {
+        "p50_ms": 2.6555805,
+        "p95_ms": 3.8979162999999994,
+        "mean_ms": 2.8019373666666665
+      },
+      "total": {
+        "p50_ms": 47.5874935,
+        "p95_ms": 52.072071799999996,
+        "mean_ms": 48.31070350000001
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 8,
+      "repeat": 1,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.1767715,
+        "p95_ms": 0.26283070000000003,
+        "mean_ms": 0.19381454666666664
+      },
+      "sidebar": {
+        "p50_ms": 0.421244,
+        "p95_ms": 0.5109429500000001,
+        "mean_ms": 0.4349125199999999
+      },
+      "simulation": {
+        "p50_ms": 44.970104500000005,
+        "p95_ms": 49.37759095,
+        "mean_ms": 45.583203566666675
+      },
+      "draw": {
+        "p50_ms": 2.8763775000000003,
+        "p95_ms": 3.18596235,
+        "mean_ms": 2.937118666666667
+      },
+      "total": {
+        "p50_ms": 48.1243295,
+        "p95_ms": 52.395936549999995,
+        "mean_ms": 48.52032223333334
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 1,
+      "repeat": 1,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.00021,
+        "mean_ms": 0.00017746000000000003
+      },
+      "sidebar": {
+        "p50_ms": 0.39265150000000004,
+        "p95_ms": 0.53147425,
+        "mean_ms": 0.4195380333333334
+      },
+      "simulation": {
+        "p50_ms": 6.3732454999999995,
+        "p95_ms": 7.47331235,
+        "mean_ms": 6.5804721
+      },
+      "draw": {
+        "p50_ms": 2.6119399999999997,
+        "p95_ms": 3.8398124499999997,
+        "mean_ms": 2.9214780666666664
+      },
+      "total": {
+        "p50_ms": 9.1150515,
+        "p95_ms": 10.747695599999998,
+        "mean_ms": 9.501950166666669
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 1,
+      "repeat": 1,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.17684149999999998,
+        "p95_ms": 0.21831380000000006,
+        "mean_ms": 0.18582206
+      },
+      "sidebar": {
+        "p50_ms": 0.433613,
+        "p95_ms": 0.5343591,
+        "mean_ms": 0.44883984999999993
+      },
+      "simulation": {
+        "p50_ms": 5.726176000000001,
+        "p95_ms": 7.614588699999999,
+        "mean_ms": 6.018871433333333
+      },
+      "draw": {
+        "p50_ms": 2.6676285,
+        "p95_ms": 2.8994398,
+        "mean_ms": 2.7561635333333334
+      },
+      "total": {
+        "p50_ms": 8.414626,
+        "p95_ms": 10.54765485,
+        "mean_ms": 8.775034966666668
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 1,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.0002114500000000001,
+        "mean_ms": 0.00018490333333333334
+      },
+      "sidebar": {
+        "p50_ms": 0.397594,
+        "p95_ms": 0.51761355,
+        "mean_ms": 0.42506413
+      },
+      "simulation": {
+        "p50_ms": 45.699298,
+        "p95_ms": 48.7995806,
+        "mean_ms": 46.25062563333334
+      },
+      "draw": {
+        "p50_ms": 3.1768555,
+        "p95_ms": 3.4226596999999996,
+        "mean_ms": 3.2726196666666665
+      },
+      "total": {
+        "p50_ms": 48.8412465,
+        "p95_ms": 52.01209025,
+        "mean_ms": 49.5232453
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 1,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.370854,
+        "p95_ms": 0.6592417500000001,
+        "mean_ms": 0.47340451333333333
+      },
+      "sidebar": {
+        "p50_ms": 0.436207,
+        "p95_ms": 0.56081775,
+        "mean_ms": 0.4514372066666666
+      },
+      "simulation": {
+        "p50_ms": 43.7707925,
+        "p95_ms": 45.12866105,
+        "mean_ms": 43.81523729999999
+      },
+      "draw": {
+        "p50_ms": 3.529993,
+        "p95_ms": 3.8829933999999997,
+        "mean_ms": 3.5749927333333336
+      },
+      "total": {
+        "p50_ms": 47.360941,
+        "p95_ms": 48.76009145,
+        "mean_ms": 47.39023003333334
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 1,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00018,
+        "p95_ms": 0.00022,
+        "mean_ms": 0.00018604
+      },
+      "sidebar": {
+        "p50_ms": 0.4011195,
+        "p95_ms": 0.47389805,
+        "mean_ms": 0.4130170766666667
+      },
+      "simulation": {
+        "p50_ms": 5.6050185,
+        "p95_ms": 5.9144571,
+        "mean_ms": 5.620763633333334
+      },
+      "draw": {
+        "p50_ms": 2.855677,
+        "p95_ms": 3.0701837,
+        "mean_ms": 2.893612266666667
+      },
+      "total": {
+        "p50_ms": 8.4505605,
+        "p95_ms": 8.8785354,
+        "mean_ms": 8.5143759
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 1,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.363923,
+        "p95_ms": 0.41925590000000007,
+        "mean_ms": 0.38293216333333335
+      },
+      "sidebar": {
+        "p50_ms": 0.436593,
+        "p95_ms": 0.5816729500000002,
+        "mean_ms": 0.47302097000000004
+      },
+      "simulation": {
+        "p50_ms": 6.1532895,
+        "p95_ms": 7.08609105,
+        "mean_ms": 6.2223745
+      },
+      "draw": {
+        "p50_ms": 3.7171545,
+        "p95_ms": 4.50913635,
+        "mean_ms": 3.7888720333333334
+      },
+      "total": {
+        "p50_ms": 9.812712,
+        "p95_ms": 11.480953699999999,
+        "mean_ms": 10.011246533333331
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 2,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.372106,
+        "p95_ms": 0.5859071,
+        "mean_ms": 0.4083000833333333
+      },
+      "sidebar": {
+        "p50_ms": 0.440794,
+        "p95_ms": 0.6045397000000002,
+        "mean_ms": 0.4618941466666666
+      },
+      "simulation": {
+        "p50_ms": 5.9909695,
+        "p95_ms": 7.6462569,
+        "mean_ms": 6.137517599999999
+      },
+      "draw": {
+        "p50_ms": 3.578666,
+        "p95_ms": 4.280389749999999,
+        "mean_ms": 3.618697366666667
+      },
+      "total": {
+        "p50_ms": 9.4836665,
+        "p95_ms": 11.3940331,
+        "mean_ms": 9.756214966666667
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 2,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00018,
+        "p95_ms": 0.00022,
+        "mean_ms": 0.00018505
+      },
+      "sidebar": {
+        "p50_ms": 0.39480000000000004,
+        "p95_ms": 0.50829875,
+        "mean_ms": 0.4055141
+      },
+      "simulation": {
+        "p50_ms": 5.8328825,
+        "p95_ms": 7.002616499999999,
+        "mean_ms": 6.047606733333334
+      },
+      "draw": {
+        "p50_ms": 3.0346815,
+        "p95_ms": 3.3610567,
+        "mean_ms": 3.0519681333333333
+      },
+      "total": {
+        "p50_ms": 8.945,
+        "p95_ms": 10.060644400000001,
+        "mean_ms": 9.099574866666666
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 2,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.359651,
+        "p95_ms": 0.4156153500000002,
+        "mean_ms": 0.3728865533333333
+      },
+      "sidebar": {
+        "p50_ms": 0.4291315,
+        "p95_ms": 0.50921655,
+        "mean_ms": 0.43752301666666665
+      },
+      "simulation": {
+        "p50_ms": 43.775304500000004,
+        "p95_ms": 46.3681011,
+        "mean_ms": 43.95876423333333
+      },
+      "draw": {
+        "p50_ms": 3.5426815,
+        "p95_ms": 3.6740081,
+        "mean_ms": 3.5452848999999995
+      },
+      "total": {
+        "p50_ms": 47.297298999999995,
+        "p95_ms": 50.138099,
+        "mean_ms": 47.50404913333333
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 2,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00018,
+        "p95_ms": 0.00025,
+        "mean_ms": 0.00019238666666666668
+      },
+      "sidebar": {
+        "p50_ms": 0.3953505,
+        "p95_ms": 0.46531530000000004,
+        "mean_ms": 0.4116540166666667
+      },
+      "simulation": {
+        "p50_ms": 44.9694025,
+        "p95_ms": 57.25542659999999,
+        "mean_ms": 46.76926986666667
+      },
+      "draw": {
+        "p50_ms": 3.1437049999999997,
+        "p95_ms": 3.95894515,
+        "mean_ms": 3.294162566666667
+      },
+      "total": {
+        "p50_ms": 48.24741,
+        "p95_ms": 61.149376950000004,
+        "mean_ms": 50.06343243333334
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 1,
+      "repeat": 2,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.177427,
+        "p95_ms": 0.2508885500000001,
+        "mean_ms": 0.1916323233333333
+      },
+      "sidebar": {
+        "p50_ms": 0.435681,
+        "p95_ms": 0.58722485,
+        "mean_ms": 0.4558424066666667
+      },
+      "simulation": {
+        "p50_ms": 5.735203500000001,
+        "p95_ms": 6.911443149999999,
+        "mean_ms": 5.892717200000001
+      },
+      "draw": {
+        "p50_ms": 2.6899115,
+        "p95_ms": 3.6611129499999993,
+        "mean_ms": 2.7960597333333337
+      },
+      "total": {
+        "p50_ms": 8.4768975,
+        "p95_ms": 10.26405335,
+        "mean_ms": 8.688776933333335
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 1,
+      "repeat": 2,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.00023,
+        "mean_ms": 0.00018251
+      },
+      "sidebar": {
+        "p50_ms": 0.40185499999999996,
+        "p95_ms": 0.5205968500000001,
+        "mean_ms": 0.42309997999999993
+      },
+      "simulation": {
+        "p50_ms": 5.6452279999999995,
+        "p95_ms": 6.15467545,
+        "mean_ms": 5.7496504999999996
+      },
+      "draw": {
+        "p50_ms": 2.3760839999999996,
+        "p95_ms": 2.68241475,
+        "mean_ms": 2.4193916333333334
+      },
+      "total": {
+        "p50_ms": 8.0501255,
+        "p95_ms": 8.5955167,
+        "mean_ms": 8.169042133333335
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 8,
+      "repeat": 2,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.177061,
+        "p95_ms": 0.2513477,
+        "mean_ms": 0.19186151666666665
+      },
+      "sidebar": {
+        "p50_ms": 0.4344745,
+        "p95_ms": 0.52514585,
+        "mean_ms": 0.46078793333333334
+      },
+      "simulation": {
+        "p50_ms": 45.029047,
+        "p95_ms": 47.898480199999995,
+        "mean_ms": 45.73222886666667
+      },
+      "draw": {
+        "p50_ms": 2.9243745,
+        "p95_ms": 3.2312103,
+        "mean_ms": 2.9538809333333336
+      },
+      "total": {
+        "p50_ms": 48.044655,
+        "p95_ms": 50.99401544999999,
+        "mean_ms": 48.68610979999999
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 8,
+      "repeat": 2,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00018,
+        "p95_ms": 0.000231,
+        "mean_ms": 0.00018877
+      },
+      "sidebar": {
+        "p50_ms": 0.392371,
+        "p95_ms": 0.5186620000000001,
+        "mean_ms": 0.41223910666666663
+      },
+      "simulation": {
+        "p50_ms": 45.725732,
+        "p95_ms": 47.67422485,
+        "mean_ms": 45.762503800000005
+      },
+      "draw": {
+        "p50_ms": 2.7225205,
+        "p95_ms": 3.0738683,
+        "mean_ms": 2.7634497999999996
+      },
+      "total": {
+        "p50_ms": 48.466283000000004,
+        "p95_ms": 50.3588845,
+        "mean_ms": 48.5259536
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 8,
+      "repeat": 3,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.00017,
+        "p95_ms": 0.00022,
+        "mean_ms": 0.00018123
+      },
+      "sidebar": {
+        "p50_ms": 0.39510999999999996,
+        "p95_ms": 0.48838675000000004,
+        "mean_ms": 0.4119847166666667
+      },
+      "simulation": {
+        "p50_ms": 44.669318000000004,
+        "p95_ms": 46.799396599999994,
+        "mean_ms": 44.59291086666668
+      },
+      "draw": {
+        "p50_ms": 2.651989,
+        "p95_ms": 2.9515523999999997,
+        "mean_ms": 2.6666164333333326
+      },
+      "total": {
+        "p50_ms": 47.3150025,
+        "p95_ms": 49.53150349999999,
+        "mean_ms": 47.259527299999995
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 8,
+      "repeat": 3,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.178799,
+        "p95_ms": 0.20481615000000003,
+        "mean_ms": 0.18458333333333332
+      },
+      "sidebar": {
+        "p50_ms": 0.4322755,
+        "p95_ms": 0.5122990500000001,
+        "mean_ms": 0.4429015766666667
+      },
+      "simulation": {
+        "p50_ms": 44.3298725,
+        "p95_ms": 47.592757049999996,
+        "mean_ms": 44.657213633333335
+      },
+      "draw": {
+        "p50_ms": 2.8943190000000003,
+        "p95_ms": 3.21706745,
+        "mean_ms": 2.9377970000000007
+      },
+      "total": {
+        "p50_ms": 47.2850225,
+        "p95_ms": 50.53672695,
+        "mean_ms": 47.59501063333334
+      }
+    },
+    {
+      "version": "after",
+      "width": 860,
+      "speed": 1,
+      "repeat": 3,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.00023,
+        "mean_ms": 0.00018697333333333335
+      },
+      "sidebar": {
+        "p50_ms": 0.3926265,
+        "p95_ms": 0.46839305000000003,
+        "mean_ms": 0.41049288666666667
+      },
+      "simulation": {
+        "p50_ms": 5.7736145,
+        "p95_ms": 6.70936505,
+        "mean_ms": 5.856114099999999
+      },
+      "draw": {
+        "p50_ms": 2.3818815,
+        "p95_ms": 2.6262021,
+        "mean_ms": 2.4066647999999997
+      },
+      "total": {
+        "p50_ms": 8.132817,
+        "p95_ms": 9.30452205,
+        "mean_ms": 8.2627789
+      }
+    },
+    {
+      "version": "before",
+      "width": 860,
+      "speed": 1,
+      "repeat": 3,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.176225,
+        "p95_ms": 0.20392949999999999,
+        "mean_ms": 0.18395654333333333
+      },
+      "sidebar": {
+        "p50_ms": 0.425335,
+        "p95_ms": 0.45523805,
+        "mean_ms": 0.43453247000000006
+      },
+      "simulation": {
+        "p50_ms": 5.5462675,
+        "p95_ms": 6.352043999999998,
+        "mean_ms": 5.6422189666666664
+      },
+      "draw": {
+        "p50_ms": 2.5681125,
+        "p95_ms": 2.8761170999999996,
+        "mean_ms": 2.6058419333333336
+      },
+      "total": {
+        "p50_ms": 8.155787,
+        "p95_ms": 9.323331149999998,
+        "mean_ms": 8.2480609
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 3,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.00021,
+        "mean_ms": 0.00018334333333333336
+      },
+      "sidebar": {
+        "p50_ms": 0.3951705,
+        "p95_ms": 0.42873505,
+        "mean_ms": 0.4012287233333333
+      },
+      "simulation": {
+        "p50_ms": 43.7876655,
+        "p95_ms": 46.5337715,
+        "mean_ms": 44.2047071
+      },
+      "draw": {
+        "p50_ms": 3.074305,
+        "p95_ms": 3.3000265,
+        "mean_ms": 3.082530733333334
+      },
+      "total": {
+        "p50_ms": 46.85858,
+        "p95_ms": 49.70548719999999,
+        "mean_ms": 47.28723783333334
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 8,
+      "repeat": 3,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 260,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.365145,
+        "p95_ms": 0.41521265,
+        "mean_ms": 0.3733151733333333
+      },
+      "sidebar": {
+        "p50_ms": 0.4326065,
+        "p95_ms": 0.49089570000000005,
+        "mean_ms": 0.44476131666666674
+      },
+      "simulation": {
+        "p50_ms": 43.9514875,
+        "p95_ms": 46.33716125,
+        "mean_ms": 44.33019826666668
+      },
+      "draw": {
+        "p50_ms": 3.524428,
+        "p95_ms": 3.7485082499999995,
+        "mean_ms": 3.5558288333333334
+      },
+      "total": {
+        "p50_ms": 47.511122,
+        "p95_ms": 49.893675550000005,
+        "mean_ms": 47.8860271
+      }
+    },
+    {
+      "version": "after",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 3,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.000171,
+        "p95_ms": 0.00021005,
+        "mean_ms": 0.00018132333333333335
+      },
+      "sidebar": {
+        "p50_ms": 0.3959315,
+        "p95_ms": 0.46651260000000006,
+        "mean_ms": 0.41356499999999996
+      },
+      "simulation": {
+        "p50_ms": 5.5408235,
+        "p95_ms": 6.0243739,
+        "mean_ms": 5.647998966666667
+      },
+      "draw": {
+        "p50_ms": 2.8274725,
+        "p95_ms": 3.2297997499999997,
+        "mean_ms": 2.8930072000000004
+      },
+      "total": {
+        "p50_ms": 8.4581665,
+        "p95_ms": 9.059458249999999,
+        "mean_ms": 8.541006166666667
+      }
+    },
+    {
+      "version": "before",
+      "width": 1100,
+      "speed": 1,
+      "repeat": 3,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "grid_size": 48,
+      "steps": 50,
+      "model_sources": [
+        "weights/01_heart/seed_000/checkpoints/best.pt",
+        "weights/02_star/seed_001/checkpoints/best.pt"
+      ],
+      "empty_effects": {
+        "p50_ms": 0.364123,
+        "p95_ms": 0.46122465000000024,
+        "mean_ms": 0.3795487066666666
+      },
+      "sidebar": {
+        "p50_ms": 0.428475,
+        "p95_ms": 0.50938265,
+        "mean_ms": 0.4416991333333333
+      },
+      "simulation": {
+        "p50_ms": 5.589091,
+        "p95_ms": 6.637638899999997,
+        "mean_ms": 5.7488502666666665
+      },
+      "draw": {
+        "p50_ms": 3.2423130000000002,
+        "p95_ms": 3.6722724999999996,
+        "mean_ms": 3.322680600000001
+      },
+      "total": {
+        "p50_ms": 8.9359705,
+        "p95_ms": 10.396014349999996,
+        "mean_ms": 9.071530866666667
+      }
+    }
+  ]
+}

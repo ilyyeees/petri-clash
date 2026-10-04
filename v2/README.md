@@ -120,6 +120,8 @@ python v2/benchmark.py --mode nca --synthetic --steps 200  # explicit untrained 
 
 Benchmarks exclude warmup, loading, rendering, and frame pacing. Reports include p50/p95 latency, steps/second, versions, model fingerprints, and final-state hashes. See [verification](verification/README.md) for actual CPU results. No NCA math or parameter layout was changed for a speculative speedup.
 
+The UI also avoids empty full-board effect overlays and prepares the fixed-size culture previews once. The [raster-efficiency report](verification/raster-efficiency.md) measures that drawing improvement and verifies identical pixels, simulation tensors and RNG state; it does not claim a simulation or native-display speedup.
+
 ## Training and checkpoint portability
 
 ```bash

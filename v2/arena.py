@@ -282,7 +282,9 @@ class ArenaUI:
             s, bold=s in (18, 22, 28, 36)) for s in (11, 12, 13, 14, 16, 18, 22, 28, 36)}
         self.button_font = pygame.font.SysFont("DejaVu Sans Condensed,Arial,sans", 13, bold=True)
         self.status = [target_status(t) for t in arena.targets]
-        self.thumbs = [pygame.image.load(str(t)).convert_alpha() for t in arena.targets]
+        # Picker tiles stay 28px at every window size; prepare them once.
+        self.thumbs = [pygame.transform.smoothscale(
+            pygame.image.load(str(t)).convert_alpha(), (28, 28)) for t in arena.targets]
         self.paused, self.side, self.view = False, 0, "organisms"
         self.speed, self.radius = arena.args.steps_per_frame, arena.args.crater_radius
         self.team_colors = arena.args.team_colors
@@ -489,9 +491,11 @@ class ArenaUI:
 
     def draw_effects(self):
         pg, arena = self.pg, self.arena
+        self.effects = [effect for effect in self.effects if self.elapsed - effect["born"] < 1.25]
+        if not self.effects:
+            return
         scale = self.board.width / arena.size
         overlay = pg.Surface(self.board.size, pg.SRCALPHA)
-        self.effects = [effect for effect in self.effects if self.elapsed - effect["born"] < 1.25]
         for effect in self.effects:
             age = self.elapsed - effect["born"]
             progress = min(1.0, age / 1.25)
@@ -625,9 +629,8 @@ class ArenaUI:
             pg.draw.rect(self.window, fill, r)
             if active:
                 pg.draw.rect(self.window, GREEN if self.side == 0 else CORAL, r, 1)
-            thumb = pg.transform.smoothscale(self.thumbs[i], (28, 28))
-            if not ready:
-                thumb.set_alpha(60)
+            thumb = self.thumbs[i]
+            thumb.set_alpha(255 if ready else 60)
             self.window.blit(thumb, (r.x + 29, r.y + 2))
             self.text(str(i + 1), r.x + 5, r.y + 3, 11, MUTED)
             name = target.stem.split('_', 1)[-1]
