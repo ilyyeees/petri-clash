@@ -1,42 +1,28 @@
 import argparse
 import json
-import os
 import random
+import math
 from pathlib import Path
 
 import numpy as np
+import os
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import torch
-import torch.nn.functional as F
 
 from nca import NCA, make_seed, pick_device
-from train import train_target
-from trainer.train_v2 import resolve_config
+from checkpoints import load_checkpoint_file, normalize_state_dict, checkpoint_config, load_model_state
+from battle import (clash_step, crater, momentum_owner, compose_rgba,
+                    DEFAULT_PRESSURE_GAIN, DEFAULT_CONTROL_DECAY, DEFAULT_CAPTURE_THRESHOLD,
+                    DEFAULT_RELEASE_THRESHOLD, DEFAULT_TIE_MARGIN)
 
 
 V2_ROOT = Path(__file__).resolve().parent
 DEFAULT_TRAIN_CONFIG = V2_ROOT / "trainer" / "configs" / "single_gpu_base.toml"
-DEFAULT_PRESSURE_GAIN = 0.28
-DEFAULT_CONTROL_DECAY = 0.97
-DEFAULT_CAPTURE_THRESHOLD = 0.55
-DEFAULT_RELEASE_THRESHOLD = 0.12
-DEFAULT_TIE_MARGIN = 0.01
 
 
 def list_targets():
     return sorted((V2_ROOT / "targets").glob("*.png"))
-
-
-def normalize_state_dict(state_dict):
-    if not state_dict:
-        return state_dict
-
-    first_key = next(iter(state_dict))
-    if not first_key.startswith("_orig_mod."):
-        return state_dict
-
-    # compiled checkpoints like to smuggle this prefix in, so strip it back out
-    return {key.removeprefix("_orig_mod."): value for key, value in state_dict.items()}
 
 
 def seed_number(seed_dir):
@@ -56,7 +42,8 @@ def seed_score(seed_dir):
 
     try:
         blob = json.loads(summary_path.read_text())
-        return float(blob["score"])
+        score = float(blob["score"])
+        return score if math.isfinite(score) else float("inf")
     except Exception:
         return float("inf")
 
@@ -67,42 +54,56 @@ def maybe_channels_last(tensor, enabled, device):
     return tensor
 
 
-def discover_v2_checkpoint(target_path, preferred_seed=None):
-    target_dir = V2_ROOT / "weights" / target_path.stem
-    if not target_dir.is_dir():
-        return None
+def checkpoint_health(seed_dir):
+    """Use exported evaluation metadata; never label an unknown run as healthy."""
+    score = seed_score(seed_dir)
+    threshold = 0.2
+    try:
+        config = json.loads((seed_dir / "resolved_config.json").read_text())
+        threshold = float(config.get("stop", {}).get("collapsed_score", threshold))
+    except (OSError, ValueError, TypeError):
+        pass
+    if not math.isfinite(threshold) or threshold <= 0:
+        threshold = 0.2
+    if not math.isfinite(score):
+        return "unverified"
+    return "ready" if score < threshold else "collapsed"
 
-    if preferred_seed is not None:
-        seed_dir = target_dir / f"seed_{preferred_seed:03d}"
-        checkpoint_path = seed_dir / "checkpoints" / "best.pt"
-        if checkpoint_path.exists():
-            return checkpoint_path
 
+def discover_v2_checkpoint(target_path, preferred_seed=None, allow_unhealthy=False):
+    target_dir = V2_ROOT / "weights" / Path(target_path).stem
     candidates = []
     for seed_dir in sorted(target_dir.glob("seed_*")):
+        if preferred_seed is not None and seed_number(seed_dir) != preferred_seed:
+            continue
         checkpoint_path = seed_dir / "checkpoints" / "best.pt"
         if not checkpoint_path.exists():
             continue
+        if checkpoint_health(seed_dir) != "ready" and not allow_unhealthy:
+            continue
         candidates.append((seed_score(seed_dir), seed_number(seed_dir), checkpoint_path))
-
-    if not candidates:
-        return None
-
     candidates.sort(key=lambda row: (row[0], row[1]))
-    return candidates[0][2]
+    return candidates[0][2] if candidates else None
+
+
+def target_status(target_path):
+    checkpoint = discover_v2_checkpoint(target_path)
+    if checkpoint is not None:
+        return {"status": "ready", "score": seed_score(checkpoint.parents[1]),
+                "seed": seed_number(checkpoint.parents[1]), "checkpoint": str(checkpoint)}
+    unchecked = discover_v2_checkpoint(target_path, allow_unhealthy=True)
+    return {"status": checkpoint_health(unchecked.parents[1]) if unchecked else "missing",
+            "score": seed_score(unchecked.parents[1]) if unchecked else None,
+            "seed": seed_number(unchecked.parents[1]) if unchecked else None,
+            "checkpoint": str(unchecked) if unchecked else None}
 
 
 def load_v2_model(checkpoint_path, device):
-    blob = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    config = blob.get("config")
-
-    if config is None:
-        resolved_path = checkpoint_path.parents[1] / "resolved_config.json"
-        if resolved_path.exists():
-            config = json.loads(resolved_path.read_text())
-
-    if config is None:
-        raise SystemExit(f"missing config for {checkpoint_path}")
+    checkpoint_path = Path(checkpoint_path)
+    blob = load_checkpoint_file(checkpoint_path, device)
+    config = checkpoint_config(blob, checkpoint_path=checkpoint_path)
+    if "model" not in config or "data" not in config:
+        raise ValueError(f"missing model/data config for {checkpoint_path}")
 
     model_cfg = config["model"]
     channels_last = bool(config.get("train", {}).get("channels_last", False))
@@ -115,8 +116,9 @@ def load_v2_model(checkpoint_path, device):
     if channels_last and device == "cuda":
         model = model.to(memory_format=torch.channels_last)
 
-    model.load_state_dict(normalize_state_dict(blob["model"]))
+    load_model_state(model, blob["model"])
     model.eval()
+    score = float(blob.get("score", seed_score(checkpoint_path.parents[1])))
 
     return {
         "model": model,
@@ -126,69 +128,32 @@ def load_v2_model(checkpoint_path, device):
         "kind": "v2",
         "source": str(checkpoint_path),
         "seed_dir": checkpoint_path.parents[1].name,
-        "score": float(blob.get("score", seed_score(checkpoint_path.parents[1]))),
+        "score": score if math.isfinite(score) else None,
     }
 
 
-def default_model_bundle(device):
-    config = resolve_config(DEFAULT_TRAIN_CONFIG)
-    model_cfg = config["model"]
-    channels_last = bool(config.get("train", {}).get("channels_last", False))
-    model = NCA(
-        channels=int(model_cfg["channels"]),
-        hidden_size=int(model_cfg["hidden_size"]),
-        fire_rate=float(model_cfg["fire_rate"]),
-    ).to(device)
-    if channels_last and device == "cuda":
-        model = model.to(memory_format=torch.channels_last)
-    model.eval()
-    return {
-        "model": model,
-        "channels": int(model_cfg["channels"]),
-        "grid_size": int(config["data"]["grid_size"]),
-        "channels_last": channels_last,
-        "kind": "scratch",
-        "source": "untrained-v2",
-    }
-
-
-def ensure_model(target_path, device, bootstrap_steps, preferred_seed=None):
-    v2_checkpoint = discover_v2_checkpoint(target_path, preferred_seed=preferred_seed)
-    if v2_checkpoint is not None:
-        bundle = load_v2_model(v2_checkpoint, device)
-        score_text = f" score {bundle['score']:.5f}" if bundle["score"] < float("inf") else ""
-        print(f"loaded {target_path.stem} from {bundle['source']} ({bundle['seed_dir']}{score_text})")
-        return bundle
-
-    weight_path = V2_ROOT / "weights" / f"{target_path.stem}.pt"
-    if weight_path.exists():
-        print(
-            f"ignoring legacy flat weight {weight_path.name}; "
-            f"v2 only uses weights/{target_path.stem}/seed_###/checkpoints/best.pt"
+def ensure_model(target_path, device, bootstrap_steps=0, preferred_seed=None, allow_unhealthy=False):
+    checkpoint = discover_v2_checkpoint(target_path, preferred_seed, allow_unhealthy)
+    if checkpoint is None and bootstrap_steps > 0:
+        # Training is opt-in and imported only when explicitly requested.
+        from train import train_target
+        checkpoint = train_target(
+            target_path, steps=bootstrap_steps, seed=preferred_seed or 0, device=device,
+            group_name="clash_bootstrap", batch_size=32 if device == "cuda" else 8,
+            pool_size=1024 if device == "cuda" else 256, no_compile=True, no_amp=device != "cuda",
         )
-
-    if bootstrap_steps > 0:
-        print(f"bootstrapping {target_path.name} with the v2 trainer for {bootstrap_steps} steps")
-        checkpoint_path = train_target(
-            target_path,
-            steps=bootstrap_steps,
-            device=device,
-            group_name="clash_bootstrap",
-            batch_size=32 if device == "cuda" else 8,
-            pool_size=1024 if device == "cuda" else 256,
-            no_compile=True,
-            no_amp=device != "cuda",
+    if checkpoint is None:
+        status = target_status(target_path)["status"]
+        seed_text = f" seed {preferred_seed}" if preferred_seed is not None else ""
+        raise ValueError(
+            f"No usable checkpoint for {Path(target_path).stem}{seed_text} ({status}). "
+            "Choose a ready organism with --list-models, train it explicitly, "
+            "or use --allow-unhealthy to inspect failed/unverified weights."
         )
-        bundle = load_v2_model(checkpoint_path, device)
-        score_text = f" score {bundle['score']:.5f}" if bundle["score"] < float("inf") else ""
-        print(f"loaded {target_path.stem} from {bundle['source']} ({bundle['seed_dir']}{score_text})")
-        return bundle
-
-    print(
-        f"missing v2 weights for {target_path.stem}; "
-        f"run `python v2/train.py --target {target_path}` or pass --bootstrap-steps"
-    )
-    return default_model_bundle(device)
+    bundle = load_v2_model(checkpoint, device)
+    bundle["health"] = checkpoint_health(checkpoint.parents[1])
+    bundle["name"] = Path(target_path).stem
+    return bundle
 
 
 def clamp(value, low, high):
@@ -264,106 +229,6 @@ def reset_world(size, device, left_bundle, right_bundle, left_pos=None, right_po
     return state_a, state_b, owner, control
 
 
-def crater(state_a, state_b, owner, control, gx, gy, radius):
-    h, w = state_a.shape[-2:]
-    yy = torch.arange(h, device=state_a.device).view(1, 1, h, 1)
-    xx = torch.arange(w, device=state_a.device).view(1, 1, 1, w)
-    mask = ((xx - gx).pow(2) + (yy - gy).pow(2)) <= radius * radius
-
-    state_a = torch.where(mask.expand_as(state_a), torch.zeros_like(state_a), state_a)
-    state_b = torch.where(mask.expand_as(state_b), torch.zeros_like(state_b), state_b)
-    owner = torch.where(mask, torch.zeros_like(owner), owner)
-    control = torch.where(mask, torch.zeros_like(control), control)
-    return state_a, state_b, owner, control
-
-
-def momentum_owner(control, owner, capture_threshold, release_threshold):
-    next_owner = owner.clone()
-    next_owner = torch.where(control >= capture_threshold, torch.ones_like(next_owner), next_owner)
-    next_owner = torch.where(control <= -capture_threshold, torch.full_like(next_owner, 2), next_owner)
-    next_owner = torch.where(control.abs() <= release_threshold, torch.zeros_like(next_owner), next_owner)
-    return next_owner
-
-
-def clash_step(
-    state_a,
-    state_b,
-    owner,
-    control,
-    model_a,
-    model_b,
-    pressure_gain=DEFAULT_PRESSURE_GAIN,
-    control_decay=DEFAULT_CONTROL_DECAY,
-    capture_threshold=DEFAULT_CAPTURE_THRESHOLD,
-    release_threshold=DEFAULT_RELEASE_THRESHOLD,
-    tie_margin=DEFAULT_TIE_MARGIN,
-):
-    with torch.inference_mode():
-        proposed_a = model_a(state_a, steps=1)
-        proposed_b = model_b(state_b, steps=1)
-
-        alpha_a = proposed_a[:, 3:4].clamp(0.0, 1.0)
-        alpha_b = proposed_b[:, 3:4].clamp(0.0, 1.0)
-
-        owned_a = owner == 1
-        owned_b = owner == 2
-        near_a = F.max_pool2d(owned_a.float(), 3, stride=1, padding=1) > 0
-        near_b = F.max_pool2d(owned_b.float(), 3, stride=1, padding=1) > 0
-
-        # each side keeps its own hidden soup now, otherwise they scramble each other
-        claim_a = (alpha_a > 0.05) & (owned_a | near_a)
-        claim_b = (alpha_b > 0.05) & (owned_b | near_b)
-
-        strength_a = torch.where(claim_a, alpha_a, torch.zeros_like(alpha_a))
-        strength_b = torch.where(claim_b, alpha_b, torch.zeros_like(alpha_b))
-        pressure = strength_a - strength_b
-
-        # exact or near ties should not quietly favor the left side
-        pressure = torch.where(pressure.abs() >= tie_margin, pressure, torch.zeros_like(pressure))
-
-        # control carries territorial momentum, and decay lets abandoned cells drift back to neutral
-        next_control = control * control_decay + pressure * pressure_gain
-        next_control = next_control.clamp(-1.0, 1.0)
-        next_owner = momentum_owner(next_control, owner, capture_threshold, release_threshold)
-
-        next_state_a = torch.where(
-            (next_owner == 1).expand_as(proposed_a),
-            proposed_a,
-            torch.zeros_like(proposed_a),
-        )
-        next_state_b = torch.where(
-            (next_owner == 2).expand_as(proposed_b),
-            proposed_b,
-            torch.zeros_like(proposed_b),
-        )
-
-        dead_a = F.max_pool2d(next_state_a[:, 3:4], 3, stride=1, padding=1) <= 0.1
-        dead_b = F.max_pool2d(next_state_b[:, 3:4], 3, stride=1, padding=1) <= 0.1
-        owner_before_dead_prune = next_owner.clone()
-
-        next_state_a = torch.where(dead_a.expand_as(next_state_a), torch.zeros_like(next_state_a), next_state_a)
-        next_state_b = torch.where(dead_b.expand_as(next_state_b), torch.zeros_like(next_state_b), next_state_b)
-        next_owner = torch.where(dead_a & (next_owner == 1), torch.zeros_like(next_owner), next_owner)
-        next_owner = torch.where(dead_b & (next_owner == 2), torch.zeros_like(next_owner), next_owner)
-        lost_life = (owner_before_dead_prune != 0) & (next_owner == 0)
-        next_control = torch.where(lost_life, torch.zeros_like(next_control), next_control)
-        next_control = torch.where(next_owner == 1, next_control.clamp(min=0.0), next_control)
-        next_control = torch.where(next_owner == 2, next_control.clamp(max=0.0), next_control)
-
-    return next_state_a, next_state_b, next_owner, next_control
-
-
-def compose_rgba(state_a, state_b, owner):
-    rgba_a = state_a[:, :4]
-    rgba_b = state_b[:, :4]
-    blank = torch.zeros_like(rgba_a)
-    return torch.where(
-        (owner == 1).expand_as(rgba_a),
-        rgba_a,
-        torch.where((owner == 2).expand_as(rgba_b), rgba_b, blank),
-    )
-
-
 def render_surface(state_a, state_b, owner, team_colors=False):
     rgba = compose_rgba(state_a, state_b, owner)[0].detach().cpu().clamp(0.0, 1.0)
     if team_colors:
@@ -384,171 +249,8 @@ def select_target(index, targets):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--grid-size", type=int, default=0)
-    parser.add_argument("--window-size", type=int, default=960)
-    parser.add_argument("--fps", type=int, default=30)
-    parser.add_argument("--left", type=int, default=1)
-    parser.add_argument("--right", type=int, default=2)
-    parser.add_argument("--left-seed", type=int)
-    parser.add_argument("--right-seed", type=int)
-    parser.add_argument("--left-pos", type=parse_grid_pos)
-    parser.add_argument("--right-pos", type=parse_grid_pos)
-    parser.add_argument("--pressure-gain", type=float, default=DEFAULT_PRESSURE_GAIN)
-    parser.add_argument("--control-decay", type=float, default=DEFAULT_CONTROL_DECAY)
-    parser.add_argument("--capture-threshold", type=float, default=DEFAULT_CAPTURE_THRESHOLD)
-    parser.add_argument("--release-threshold", type=float, default=DEFAULT_RELEASE_THRESHOLD)
-    parser.add_argument("--tie-margin", type=float, default=DEFAULT_TIE_MARGIN)
-    parser.add_argument("--team-colors", action="store_true")
-    parser.add_argument("--bootstrap-steps", type=int, default=0)
-    parser.add_argument("--device", default=pick_device())
-    parser.add_argument("--headless-frames", type=int, default=0)
-    args = parser.parse_args()
-    if args.release_threshold >= args.capture_threshold:
-        raise SystemExit("--release-threshold must be smaller than --capture-threshold")
-
-    targets = list_targets()
-    if not targets:
-        raise SystemExit(f"no targets found in {V2_ROOT / 'targets'}")
-
-    if args.headless_frames > 0:
-        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-
-    pygame.init()
-    flags = pygame.RESIZABLE
-    if args.headless_frames > 0:
-        flags |= pygame.HIDDEN
-    window = pygame.display.set_mode((args.window_size, args.window_size), flags)
-    pygame.display.set_caption("petri clash")
-    clock = pygame.time.Clock()
-
-    left_index, left_target = select_target(args.left - 1, targets)
-    right_index, right_target = select_target(args.right - 1, targets)
-    left_bundle = ensure_model(left_target, args.device, args.bootstrap_steps, preferred_seed=args.left_seed)
-    right_bundle = ensure_model(right_target, args.device, args.bootstrap_steps, preferred_seed=args.right_seed)
-    left_model = left_bundle["model"]
-    right_model = right_bundle["model"]
-
-    print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
-    print(f"right -> {right_target.stem} [{right_bundle['kind']}]")
-
-    paused = False
-    frames = 0
-    grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-    state_a, state_b, owner, control = reset_world(
-        grid_size,
-        args.device,
-        left_bundle,
-        right_bundle,
-        left_pos=args.left_pos,
-        right_pos=args.right_pos,
-    )
-
-    digit_keys = {
-        pygame.K_1: 0,
-        pygame.K_2: 1,
-        pygame.K_3: 2,
-        pygame.K_4: 3,
-        pygame.K_5: 4,
-        pygame.K_6: 5,
-        pygame.K_7: 6,
-        pygame.K_8: 7,
-        pygame.K_9: 8,
-    }
-
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_SPACE:
-                    paused = not paused
-                elif event.key == pygame.K_r:
-                    state_a, state_b, owner, control = reset_world(
-                        grid_size,
-                        args.device,
-                        left_bundle,
-                        right_bundle,
-                        left_pos=args.left_pos,
-                        right_pos=args.right_pos,
-                    )
-                elif event.key in digit_keys and digit_keys[event.key] < len(targets):
-                    target_id = digit_keys[event.key]
-                    if event.mod & pygame.KMOD_SHIFT:
-                        right_index, right_target = select_target(target_id, targets)
-                        right_bundle = ensure_model(
-                            right_target,
-                            args.device,
-                            args.bootstrap_steps,
-                            preferred_seed=args.right_seed,
-                        )
-                        right_model = right_bundle["model"]
-                        print(f"right -> {right_target.stem} [{right_bundle['kind']}]")
-                    else:
-                        left_index, left_target = select_target(target_id, targets)
-                        left_bundle = ensure_model(
-                            left_target,
-                            args.device,
-                            args.bootstrap_steps,
-                            preferred_seed=args.left_seed,
-                        )
-                        left_model = left_bundle["model"]
-                        print(f"left  -> {left_target.stem} [{left_bundle['kind']}]")
-
-                    grid_size = active_grid_size(args.grid_size, left_bundle, right_bundle)
-                    state_a, state_b, owner, control = reset_world(
-                        grid_size,
-                        args.device,
-                        left_bundle,
-                        right_bundle,
-                        left_pos=args.left_pos,
-                        right_pos=args.right_pos,
-                    )
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                width, height = window.get_size()
-                gx = int(event.pos[0] * grid_size / max(width, 1))
-                gy = int(event.pos[1] * grid_size / max(height, 1))
-                state_a, state_b, owner, control = crater(
-                    state_a,
-                    state_b,
-                    owner,
-                    control,
-                    gx,
-                    gy,
-                    radius=max(2, grid_size // 12),
-                )
-
-        if not paused:
-            state_a, state_b, owner, control = clash_step(
-                state_a,
-                state_b,
-                owner,
-                control,
-                left_model,
-                right_model,
-                pressure_gain=args.pressure_gain,
-                control_decay=args.control_decay,
-                capture_threshold=args.capture_threshold,
-                release_threshold=args.release_threshold,
-                tie_margin=args.tie_margin,
-            )
-
-        surface = render_surface(state_a, state_b, owner, team_colors=args.team_colors)
-        scaled = pygame.transform.scale(surface, window.get_size())
-        window.fill((0, 0, 0))
-        window.blit(scaled, (0, 0))
-        pygame.display.flip()
-
-        frames += 1
-        if args.headless_frames > 0 and frames >= args.headless_frames:
-            running = False
-
-        clock.tick(args.fps)
-
-    pygame.quit()
+    from arena import main as run_arena
+    run_arena(default_mode="hard")
 
 
 if __name__ == "__main__":

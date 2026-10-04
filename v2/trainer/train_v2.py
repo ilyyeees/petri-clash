@@ -15,6 +15,13 @@ except Exception:
     SummaryWriter = None
 
 from nca import make_seed
+from checkpoints import (
+    load_checkpoint_file,
+    load_model_state,
+    normalize_state_dict,
+    portable_rng_blob,
+    save_checkpoint_file,
+)
 from trainer.common import (
     append_jsonl,
     checkpoint_rng_blob,
@@ -303,16 +310,16 @@ def best_checkpoint_path(run_dir):
 def save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, step, best_score, config):
     path = latest_checkpoint_path(run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
+    save_checkpoint_file(
         {
             "step": step,
             "best_score": best_score,
-            "model": model.state_dict(),
+            "model": normalize_state_dict(model.state_dict()),
             "optimizer": optimizer.state_dict(),
             "scaler": scaler.state_dict() if scaler.is_enabled() else None,
             "scheduler": scheduler.state_dict() if scheduler is not None else None,
-            "pool": pool.detach().cpu().half(),
-            "rng": checkpoint_rng_blob(),
+            "pool": pool.detach().cpu(),
+            "rng": portable_rng_blob(checkpoint_rng_blob()),
             "config": config,
             "saved_at": now_stamp(),
         },
@@ -323,12 +330,12 @@ def save_latest_checkpoint(run_dir, model, optimizer, scaler, scheduler, pool, s
 def save_best_checkpoint(run_dir, model, step, score, summary, config):
     path = best_checkpoint_path(run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
+    save_checkpoint_file(
         {
             "step": step,
             "score": score,
             "summary": summary,
-            "model": model.state_dict(),
+            "model": normalize_state_dict(model.state_dict()),
             "config": config,
             "saved_at": now_stamp(),
         },
@@ -424,8 +431,8 @@ def try_resume(run_dir, model, optimizer, scaler, scheduler, device):
     if not path.exists():
         return None
 
-    blob = torch.load(path, map_location=device, weights_only=False)
-    model.load_state_dict(blob["model"])
+    blob = load_checkpoint_file(path, map_location="cpu")
+    load_model_state(model, blob["model"])
     optimizer.load_state_dict(blob["optimizer"])
     if scaler.is_enabled() and blob.get("scaler") is not None:
         scaler.load_state_dict(blob["scaler"])

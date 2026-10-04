@@ -1,0 +1,7 @@
+# Python 3.11+. For a smaller CPU-only PyTorch install, see README.md.
+torch>=2.6
+numpy>=1.24
+pillow>=10
+pygame>=2.5
+# Optional for TensorBoard training logs; not required to play.
+tensorboard>=2.14
