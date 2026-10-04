@@ -23,12 +23,19 @@ class Arena:
         self.cache = {}
         self.left_index, self.right_index = args.left - 1, args.right - 1
         self.left = self.load(self.left_index, args.left_seed)
-        self.right = self.load(self.right_index, args.right_seed)
+        # A lesson never uses an opponent, so an unrelated failed checkpoint
+        # must not block it. Resolve that selection only if the player leaves.
+        self._deferred_right = bool(args.lesson)
+        self.right = dict(self.left) if self._deferred_right else self.load(self.right_index, args.right_seed)
         self.mode = args.mode
         self.duel_enabled = args.duel
         self.duel_config = DuelConfig(args.round_ticks, args.warmup_ticks)
+        self.lesson = None
+        self.lesson_origin = None
         self.steps = 0
         self.reset()
+        if args.lesson:
+            self.start_lesson()
 
     def load(self, index, seed=None):
         key = index, seed
@@ -46,6 +53,17 @@ class Arena:
         # Reset is a replay of this seed. Model loading must not perturb the match RNG.
         configure_runtime(seed=self.args.seed, cpu_threads=self.args.cpu_threads)
         self.size = active_grid_size(self.args.grid_size, self.left, self.right)
+        if self.lesson:
+            from lesson import Lesson
+            self.a, self.b, self.owner, self.control = (
+                torch.zeros_like(value) for value in reset_world(
+                    self.size, self.args.device, self.left, self.right))
+            center = self.size // 2
+            self.start_positions = {"left": [center, center], "right": None}
+            self.steps = 0
+            self.duel = None
+            self.lesson = Lesson(self.lesson.config, board_cells=self.size ** 2)
+            return
         left_pos, right_pos = self.args.left_pos, self.args.right_pos
         # Equal border distance removes the sandbox's random placement skew.
         # Explicit positions remain available for clearly labeled custom rounds.
@@ -65,14 +83,86 @@ class Arena:
 
     def set_duel(self, enabled):
         """Switch between an editable lab and a fresh scored round."""
+        warning = self._leave_lesson()
         self.duel_enabled = bool(enabled)
         self.reset()
+        return warning
+
+    def start_lesson(self, config=None):
+        """Start a fresh single-culture experiment with a calibrated 48px field."""
+        from lesson import Lesson
+        if self.lesson is None:
+            self.lesson_origin = self.mode, self.args.grid_size
+        self.lesson = Lesson(config, board_cells=48 ** 2)
+        self.mode, self.args.grid_size = "soft", 48
+        self.duel_enabled = False
+        self.reset()
+
+    def _leave_lesson(self):
+        warning = None
+        if self.lesson is not None:
+            if self._deferred_right:
+                try:
+                    self.right = self.load(self.right_index, self.args.right_seed)
+                except (ValueError, RuntimeError, OSError, IndexError):
+                    name = self.left["name"].split("_", 1)[-1]
+                    self.right, self.right_index = self.left, self.left_index
+                    self.args.right_seed = self.args.left_seed
+                    warning = f"Requested opponent unavailable. Both sides use {name}; choose a ready right culture."
+                self._deferred_right = False
+            self.mode, self.args.grid_size = self.lesson_origin
+            self.lesson, self.lesson_origin = None, None
+        return warning
+
+    def stop_lesson(self):
+        """Return to a fresh sandbox with its previous rules and grid setting."""
+        warning = self._leave_lesson()
+        self.duel_enabled = False
+        self.reset()
+        return warning
+
+    def plant_lesson(self):
+        if self.lesson is None or self.lesson.phase != "seed":
+            raise ValueError("Plant the lesson seed only at its seed stage")
+        center = self.size // 2
+        self.a = torch.zeros_like(self.a)
+        self.a[0, 3:5, center, center] = 1
+        self.owner = torch.zeros_like(self.owner)
+        self.control = torch.zeros_like(self.control)
+        self.owner[0, 0, center, center] = 1
+        self.control[0, 0, center, center] = 1
+        self.lesson.start_seed()
+
+    def cut_lesson(self):
+        if self.lesson is None or self.lesson.phase != "damage":
+            raise ValueError("Apply the planned cut only at its damage stage")
+        plan = self.lesson.snapshot()["plan"]
+        if plan is None:
+            raise ValueError("No safe lesson cut is available")
+        values = crater(self.a, self.b, self.owner, self.control,
+                        plan["x"], plan["y"], plan["radius"])
+        remaining = int((values[0][:, 3:4] > .1).sum().item())
+        try:
+            self.lesson.apply_damage(remaining)
+        except ValueError:
+            self.lesson.invalidate("The applied cut did not match its preview; no valid observation.")
+            return
+        self.a, self.b, self.owner, self.control = values
+
+    def watch_lesson(self):
+        if self.lesson is None:
+            raise ValueError("No lesson is active")
+        self.lesson.watch()
 
     def _require_sandbox(self):
         if self.duel_enabled:
             raise ValueError("Duel edits are locked. Switch to LAB to plant, damage, or clear.")
+        if self.lesson:
+            raise ValueError("Use the lesson's marked seed or cut. Exit the lesson for free editing.")
 
     def select(self, index, side):
+        if self.lesson and side != 0:
+            raise ValueError("The solo lesson uses the left culture")
         bundle = self.load(index, self.args.left_seed if side == 0 else self.args.right_seed)
         if side == 0:
             self.left, self.left_index = bundle, index
@@ -111,6 +201,8 @@ class Arena:
     def step(self, count=1):
         if isinstance(count, bool) or not isinstance(count, int) or count < 0:
             raise ValueError("step count must be a nonnegative integer")
+        if self.lesson:
+            return self._step_lesson(count)
         count = self.duel.clip_steps(count) if self.duel else count
         if self.duel and self.duel.mode != self.mode:
             raise ValueError("reset the round after changing its mode")
@@ -153,6 +245,37 @@ class Arena:
                         break
         return advanced
 
+    def _step_lesson(self, count):
+        """Advance only the visible culture, stopping at every teaching gate."""
+        from lesson import choose_crater
+        advanced = 0
+        with torch.inference_mode():
+            for _ in range(self.lesson.clip_steps(count)):
+                # An empty opponent would still consume stochastic update RNG.
+                # Solo inference matches the measured single-culture lesson.
+                if not bool(torch.isfinite(self.a).all()):
+                    self.steps += 1
+                    advanced += 1
+                    self.lesson.record_tick(self.steps, None, finite=False)
+                    break
+                proposed = self.left["model"](self.a)
+                if proposed.shape != self.a.shape:
+                    raise ValueError("the lesson model must preserve its state shape")
+                self.steps += 1
+                advanced += 1
+                if not bool(torch.isfinite(proposed).all()):
+                    self.lesson.record_tick(self.steps, None, finite=False)
+                    break
+                self.a = proposed
+                living = int((self.a[:, 3:4] > .1).sum().item())
+                self.lesson.record_tick(self.steps, living)
+                if self.lesson.phase == "damage":
+                    plan = choose_crater((self.a[0, 3] > .1).detach().cpu().numpy())
+                    self.lesson.set_crater(plan)
+                if not self.lesson.can_step:
+                    break
+        return advanced
+
     def stats(self):
         a, b = self.a[:, 3:4], self.b[:, 3:4]
         return {"step": self.steps, "mode": self.mode, "grid_size": self.size,
@@ -189,9 +312,10 @@ class Arena:
                 "cpu_threads": torch.get_num_threads(), "elapsed_seconds": elapsed,
                 "steps_per_second": self.steps / elapsed if elapsed > 0 else 0,
                 "left": {k: self.left.get(k) for k in ("name", "source", "seed_dir", "score", "health")},
-                "right": {k: self.right.get(k) for k in ("name", "source", "seed_dir", "score", "health")},
+                "right": None if self.lesson else {k: self.right.get(k) for k in ("name", "source", "seed_dir", "score", "health")},
                 "duel": self.duel.snapshot() if self.duel else None,
-                "placement": "custom" if self.args.left_pos or self.args.right_pos else
+                "lesson": self.lesson.snapshot() if self.lesson else None,
+                "placement": "solo-center" if self.lesson else "custom" if self.args.left_pos or self.args.right_pos else
                              ("mirrored" if self.duel else "seeded-random"),
                 "starting_positions": self.start_positions,
                 "rules": {k: getattr(self.args, k) for k in ("pressure_gain", "control_decay",
@@ -202,6 +326,7 @@ def parse_args(argv=None, default_mode="hard"):
     parser = argparse.ArgumentParser(description="Petri Clash: a living neural arena. No training required.")
     parser.add_argument("--mode", choices=("hard", "soft"), default=default_mode)
     parser.add_argument("--duel", action="store_true", help="play a fixed-length scored round with editing locked")
+    parser.add_argument("--lesson", action="store_true", help="start the optional interactive solo regrowth lesson")
     parser.add_argument("--round-ticks", type=int, default=600, help="duel length in simulation ticks, including warmup")
     parser.add_argument("--warmup-ticks", type=int, default=60, help="initial duel growth ticks excluded from scoring")
     parser.add_argument("--grid-size", type=int, default=0, help="0 uses checkpoint grid size")
@@ -233,6 +358,8 @@ def parse_args(argv=None, default_mode="hard"):
     parser.add_argument("--snapshot", type=Path, help="save final PNG (board headlessly; entire interactive window)")
     parser.add_argument("--ui-frames", type=int, default=0, help="exit interactive mode after N frames, useful for UI smoke tests")
     args = parser.parse_args(argv)
+    if args.lesson and (args.duel or args.headless_frames):
+        parser.error("--lesson is interactive and cannot be combined with --duel or --headless-frames")
     try:
         DuelConfig(args.round_ticks, args.warmup_ticks)
     except ValueError as exc:
@@ -306,6 +433,14 @@ class ArenaUI:
         self.last_draw = time.perf_counter()
         self.elapsed = 0.0
         self.duel_snapshot = None
+        self.lesson_snapshot = None
+        self.lesson_credit = 0.0
+        self.lesson_gate_pending = False
+        self.lesson_notice_phase = None
+        self.held_shift_keys = set()
+        self.lesson_prior_speed = self.speed if arena.lesson else None
+        if arena.lesson:
+            self.speed = 1
         self.refresh(reset=True)
 
     def text(self, text, x, y, size=14, color=TEXT, width=None):
@@ -340,18 +475,46 @@ class ArenaUI:
             self.effects.clear()
             self.notices.clear()
             self.result_visible = True
+            self.lesson_credit = 0.0
+            self.lesson_gate_pending = bool(self.arena.lesson)
+            self.lesson_notice_phase = None
         self.summary = self.score.update(self.stats_cache)
         self.duel_snapshot = self.arena.duel.snapshot() if self.arena.duel else None
+        before_phase = self.lesson_snapshot["phase"] if self.lesson_snapshot else None
+        self.lesson_snapshot = self.arena.lesson.snapshot() if self.arena.lesson else None
+        if self.lesson_snapshot:
+            if self.lesson_snapshot["phase"] != before_phase:
+                self.lesson_credit = 0.0
+                if self.lesson_snapshot["phase"] in ("damage", "complete", "timeout", "unavailable", "invalid"):
+                    # Teaching checkpoints should show their exact frozen board,
+                    # with no old seed/cut markers or blend from an earlier phase.
+                    self.effects.clear()
+                    self.blend.reset()
+            if not self.lesson_snapshot["can_step"]:
+                self.paused = True
         if self.duel_snapshot and self.duel_snapshot["finished"]:
             self.paused = True
 
     def notice(self, text, color=TEXT):
         self.message = text
+        self.lesson_notice_phase = self.arena.lesson.phase if self.arena.lesson else None
         self.notices.append((text, color, self.elapsed))
         self.notices = self.notices[-3:]
 
     def interact(self, x, y, side=None):
         """Apply one input, then report its real immediate effect, even paused."""
+        if self.arena.lesson:
+            marker = self.lesson_marker()
+            phase = self.arena.lesson.phase
+            if marker:
+                gx, gy, radius = marker
+                hit_radius = 2 if phase == "seed" else radius
+                inside = (x - gx) ** 2 + (y - gy) ** 2 <= hit_radius ** 2
+                if inside and ((phase == "seed" and side == 0) or (phase == "damage" and side is None)):
+                    self.lesson_primary()
+                    return
+            self.notice("Use the marked seed or cut, or press Enter. G returns to free editing.", AMBER)
+            return
         if self.arena.duel:
             self.notice("Duel edits are locked. BACK TO LAB restores planting and damage.", AMBER)
             return
@@ -378,6 +541,9 @@ class ArenaUI:
         self.notice(detail, color)
 
     def draw_score(self, width):
+        if self.arena.lesson:
+            self.draw_lesson_score()
+            return
         pg, st = self.pg, self.stats_cache
         sx, y = self.rail_x, 111
         self.score_rect = pg.Rect(sx, y, 286, 181)
@@ -429,6 +595,155 @@ class ArenaUI:
                 filled = round(bar_width * value / total)
                 if filled:
                     pg.draw.rect(self.window, color, (bar.x, bar.y, filled, 4))
+
+    def lesson_instruction(self):
+        phase = self.arena.lesson.phase
+        return {
+            "seed": ("Plant at the marked crosshair.", "Shift-click it or press Enter."),
+            "grow": (f"Grow to {self.arena.lesson.config.grow_ticks} simulation ticks.", "Space pauses; N advances one tick."),
+            "damage": ("Inspect the highlighted practice cut.", "Click the cut or Enter to apply it."),
+            "injured": ("The cut is frozen for inspection.", "Space / Enter watches; N steps."),
+            "recover": (f"Slow watch: {6 * self.speed} ticks/s.", f"Hold the count goal for {self.arena.lesson.config.hold_ticks} ticks."),
+            "complete": ("Living-cell recovery observed.", "Press R to repeat the experiment."),
+            "timeout": ("The count target was not held.", "R retries; choose another culture."),
+            "unavailable": ("No safe practice cut for this state.", "R retries; choose another culture."),
+            "invalid": ("This observation is not valid.", "Try a ready culture or restart."),
+        }[phase]
+
+    def lesson_marker(self):
+        if not self.arena.lesson:
+            return None
+        if self.arena.lesson.phase == "seed":
+            return self.arena.size // 2, self.arena.size // 2, 1
+        if self.arena.lesson.phase == "damage":
+            plan = self.arena.lesson.snapshot()["plan"]
+            if plan:
+                return plan["x"], plan["y"], plan["radius"]
+        return None
+
+    def lesson_primary(self):
+        if not self.arena.lesson or self.lesson_gate_pending:
+            return
+        from feedback import FrameBlend
+        phase = self.arena.lesson.phase
+        marker = self.lesson_marker()
+        if phase == "seed":
+            self.arena.plant_lesson()
+            self.paused = False
+            self.notice("Seed planted. Watch one culture grow; Space pauses and N steps.", GREEN)
+            label, kind, color = "LESSON SEED", "plant", GREEN
+        elif phase == "damage":
+            plan = self.arena.lesson.snapshot()["plan"]
+            self.arena.cut_lesson()
+            self.paused = True
+            if not self.arena.lesson.snapshot()["valid"]:
+                self.refresh()
+                return
+            self.notice(f"Cut removed {plan['removed']} living cells. Space watches regrowth; N steps.", AMBER)
+            label, kind, color = f"CUT -{plan['removed']} LIFE", "damage", AMBER
+        elif phase == "injured":
+            self.arena.watch_lesson()
+            self.paused = False
+            self.lesson_credit = 0.0
+            self.lesson_gate_pending = True
+            self.notice(f"Slow observation: {6 * self.speed} simulation ticks per second. N inspects one tick.")
+            self.refresh()
+            return
+        elif self.arena.lesson.finished:
+            self.action("reset")
+            return
+        else:
+            return
+        self.lesson_gate_pending = True
+        self.blend = FrameBlend()
+        if marker:
+            x, y, radius = marker
+            self.effects.append({"x": x, "y": y, "radius": radius, "kind": kind,
+                                 "color": color, "label": label, "born": self.elapsed})
+        self.refresh()
+
+    def step_budget(self, elapsed_seconds):
+        """Slow lesson observation without slowing rendering or scoring by wall time."""
+        if self.paused:
+            self.lesson_credit = 0.0
+            return 0
+        if self.arena.lesson and self.arena.lesson.phase == "recover":
+            elapsed = float(elapsed_seconds)
+            elapsed = min(.25, max(0.0, elapsed)) if math.isfinite(elapsed) else 0.0
+            self.lesson_credit += elapsed * 6 * self.speed
+            count = int(self.lesson_credit)
+            self.lesson_credit -= count
+            return count
+        self.lesson_credit = 0.0
+        return self.speed
+
+    def draw_lesson_score(self):
+        pg, lesson = self.pg, self.lesson_snapshot
+        sx, y = self.rail_x, 111
+        self.score_rect = pg.Rect(sx, y, 286, 181)
+        self.score_bars = []
+        phase = lesson["phase"]
+        name = self.arena.left["name"].split("_", 1)[-1].upper()
+        self.text("SOLO / " + name, sx + 12, y, 12, AMBER, 206)
+        self.text("PAUSED" if self.paused else "LIVE", sx + 222, y, 11, MUTED)
+        stages = {"seed": "01 / PLANT", "grow": "02 / GROW", "damage": "03 / PREVIEW CUT",
+                  "injured": "04 / INSPECT CUT", "recover": "05 / OBSERVE", "complete": "RECOVERY OBSERVED",
+                  "timeout": "OBSERVATION ENDED", "unavailable": "NO SAFE CUT", "invalid": "INVALID OBSERVATION"}
+        color = GREEN if phase == "complete" else CORAL if phase == "invalid" else TEXT
+        self.text(stages[phase], sx + 12, y + 23, 18, color, 262)
+        current = lesson["current"]
+        value = "0" if phase == "seed" else "—" if current is None else f"{current:,}"
+        self.text(value, sx + 10, y + 47, 36, GREEN, 128)
+        self.text("living cells", sx + 12, y + 91, 12, MUTED)
+        percent = 100 * lesson["config"]["target_num"] / lesson["config"]["target_den"]
+        goal_label = f"{percent:.0f}% goal" if percent.is_integer() else f"{percent:.1f}% goal"
+        for row, (label, value) in enumerate((("Baseline", lesson["baseline"]), (goal_label, lesson["target"]))):
+            self.text(label, sx + 156, y + 48 + row * 27, 11, MUTED)
+            self.text("—" if value is None else str(value), sx + 223, y + 46 + row * 27, 16, TEXT, 50)
+        if phase in ("seed", "grow"):
+            progress = f"Growth {lesson['growth_ticks']} / {lesson['config']['grow_ticks']} ticks"
+            fraction = lesson["growth_ticks"] / lesson["config"]["grow_ticks"]
+        elif phase == "damage":
+            plan = lesson["plan"]
+            progress = f"Cut removes {plan['removed']} / {plan['baseline']} cells" if plan else "Preparing a safe practice cut"
+            fraction = 0.0
+        else:
+            progress = f"Recovery {lesson['recovery_ticks']} ticks / hold {lesson['hold']} of {lesson['required_hold']}"
+            fraction = min(1.0, (current or 0) / lesson["baseline"]) if lesson["baseline"] else 0.0
+        self.text(progress, sx + 12, y + 114, 12, MUTED, 262)
+        button = {"seed": "PLANT SEED / ENTER", "damage": "APPLY CUT / ENTER",
+                  "injured": "WATCH REGROWTH / SPACE"}.get(phase)
+        if lesson["finished"]:
+            button = "RETRY LESSON / R"
+        if button:
+            self.button((sx + 12, y + 139, 262, 27), button, "lesson_primary", True)
+        else:
+            self.text("Space: pause / N: inspect one tick", sx + 12, y + 144, 12, MUTED, 262)
+        bar = pg.Rect(sx + 12, y + 175, 262, 3)
+        self.score_bars.append(bar)
+        pg.draw.rect(self.window, BORDER, bar)
+        if fraction > 0:
+            pg.draw.rect(self.window, GREEN, (bar.x, bar.y, round(bar.width * fraction), bar.height))
+
+    def draw_lesson_cue(self):
+        marker = self.lesson_marker()
+        if marker is None:
+            return
+        pg, size = self.pg, self.arena.size
+        x, y, radius = marker
+        scale = self.board.width / size
+        center = (self.board.x + (x + .5) * scale, self.board.y + (y + .5) * scale)
+        color = GREEN if self.arena.lesson.phase == "seed" else AMBER
+        if self.arena.lesson.phase == "damage":
+            yy, xx = np.ogrid[:size, :size]
+            mask = (xx - x) ** 2 + (yy - y) ** 2 <= radius ** 2
+            rgba = np.zeros((size, size, 4), dtype=np.uint8)
+            rgba[mask] = (*AMBER, 75)
+            overlay = pg.image.frombuffer(rgba.tobytes(), (size, size), "RGBA")
+            self.window.blit(pg.transform.scale(overlay, self.board.size), self.board)
+        pg.draw.circle(self.window, color, center, max(10, round(radius * scale)), 2)
+        pg.draw.line(self.window, color, (center[0] - 7, center[1]), (center[0] + 7, center[1]), 2)
+        pg.draw.line(self.window, color, (center[0], center[1] - 7), (center[0], center[1] + 7), 2)
 
     def duel_headline(self):
         duel = self.duel_snapshot
@@ -542,21 +857,31 @@ class ArenaUI:
         self.rail_x = sx
         self.board = pg.Rect(bx, by, size, size)
         self.text("PETRI CLASH", bx, 13, 28)
-        subtitle = "SEEDED DUEL / SUSTAIN MORE LIFE" if arena.duel and arena.mode == "soft" else \
+        subtitle = "REGROWTH LESSON / SINGLE CULTURE" if arena.lesson else \
+                   "SEEDED DUEL / SUSTAIN MORE LIFE" if arena.duel and arena.mode == "soft" else \
                    "SEEDED DUEL / HOLD MORE LAND" if arena.duel else "NEURAL GROWTH SANDBOX"
         self.text(subtitle, bx + 1, 49, 11, MUTED)
         self.button((self.board.right - 110, 22, 110, 27),
                     "BACK TO LAB" if arena.duel else "START DUEL", "duel", bool(arena.duel))
+        self.button((self.board.right - 220, 22, 104, 27),
+                    "EXIT LESSON" if arena.lesson else "LESSON / G", "lesson", bool(arena.lesson))
         self.text(f"SEED {arena.args.seed:03d}", sx + 12, 23, 12, AMBER)
         self.text(f"TICK {arena.steps:05d} / {self.current_fps:.0f} FPS", sx + 12, 47, 11, MUTED)
         x = bx
         finished = bool(arena.duel and arena.duel.finished)
+        pause_control = ("RESULT", "result", self.result_visible) if finished else \
+                        ("RESUME" if self.paused else "PAUSE", "pause", self.paused)
+        if arena.lesson:
+            label = {"seed": "PLANT", "damage": "CUT", "injured": "WATCH"}.get(arena.lesson.phase)
+            if arena.lesson.finished:
+                pause_control = "RETRY", "reset", True
+            elif label:
+                pause_control = label, "lesson_primary", True
         for width, label, action, active in (
-            (74, "RESULT" if finished else "RESUME" if self.paused else "PAUSE",
-             "result" if finished else "pause", self.result_visible if finished else self.paused),
+            (74, *pause_control),
             (68, "REPLAY", "reset", False), (48, "STEP", "step", False),
             (42, f"{self.speed}x", "speed", False),
-            (66, "HARD" if arena.mode == "hard" else "SOFT", "mode", True),
+            (66, "SOLO" if arena.lesson else "HARD" if arena.mode == "hard" else "SOFT", "mode", True),
             (72, "COLORS", "colors", self.team_colors),
             (60, "FX OFF" if self.reduced_motion else "FX ON", "motion", not self.reduced_motion)):
             self.button((x, 73, width, 27), label, action, active)
@@ -569,6 +894,8 @@ class ArenaUI:
         surface = pg.surfarray.make_surface(array.swapaxes(0, 1))
         self.window.blit(pg.transform.scale(surface, self.board.size), self.board)
         self.draw_effects()
+        if arena.lesson:
+            self.draw_lesson_cue()
         for corner_x, corner_y, dx, dy in ((self.board.left - 2, self.board.top - 2, 1, 1),
                 (self.board.right + 1, self.board.top - 2, -1, 1),
                 (self.board.left - 2, self.board.bottom + 1, 1, -1),
@@ -576,12 +903,12 @@ class ArenaUI:
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x + dx * 7, corner_y), 1)
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x, corner_y + dy * 7), 1)
         mouse = pg.mouse.get_pos()
-        if self.board.collidepoint(mouse) and not arena.duel:
+        if self.board.collidepoint(mouse) and not arena.duel and not arena.lesson:
             planting = bool(pg.key.get_mods() & pg.KMOD_SHIFT)
             radius = max(3, round((1 if planting else self.radius) * self.board.width / arena.size))
             pg.draw.circle(self.window, GREEN if planting else AMBER, mouse, radius, 1)
         # Inset labels identify the field without a rounded dashboard badge.
-        label = (self.duel_headline() if arena.duel else
+        label = (f"LESSON / {arena.lesson.phase.upper()}" if arena.lesson else self.duel_headline() if arena.duel else
                  "PAUSED / N TO STEP" if self.paused else f"{self.view.upper()} / {arena.mode.upper()}")
         self.text(label, self.board.x + 12, self.board.y + 11, 11, AMBER if self.paused else MUTED)
         size_label = f"{arena.size} x {arena.size}"
@@ -595,9 +922,19 @@ class ArenaUI:
         self.draw_duel()
         self.draw_underboard()
         pg.display.flip()
+        self.lesson_gate_pending = False
 
     def draw_underboard(self):
         x, y, width = self.board.x, self.board.bottom + 10, self.board.width
+        if self.arena.lesson:
+            instruction = self.lesson_instruction()
+            lesson = self.lesson_snapshot
+            text = (self.notices[-1][0] if self.notices and self.lesson_notice_phase == lesson["phase"] else
+                    f"Count recovered after {lesson['recovery_ticks']} ticks: {lesson['baseline']} before / {lesson['remaining_after_cut']} cut / {lesson['current']} now."
+                    if lesson["phase"] == "complete" else instruction[0])
+            self.text(text, x, y, 12, TEXT, width)
+            self.text(instruction[1] + "  /  G: exit lesson", x, y + 22, 11, MUTED, width)
+            return
         if self.notices:
             text, color, _ = self.notices[-1]
             self.text(text, x, y, 12, color, width)
@@ -615,9 +952,12 @@ class ArenaUI:
         pg, arena = self.pg, self.arena
         pg.draw.line(self.window, BORDER, (sx + 12, y - 9), (sx + sidebar - 12, y - 9))
         self.text("CULTURES", sx + 12, y, 12, AMBER)
-        self.text("SELECT FOR", sx + 12, y + 27, 11, MUTED)
-        self.button((sx + 99, y + 22, 76, 25), "LEFT", "left", self.side == 0, GREEN)
-        self.button((sx + 181, y + 22, 93, 25), "RIGHT", "right", self.side == 1, CORAL)
+        if arena.lesson:
+            self.text("SOLO CULTURE / 1–9 RESTARTS", sx + 12, y + 27, 11, MUTED)
+        else:
+            self.text("SELECT FOR", sx + 12, y + 27, 11, MUTED)
+            self.button((sx + 99, y + 22, 76, 25), "LEFT", "left", self.side == 0, GREEN)
+            self.button((sx + 181, y + 22, 93, 25), "RIGHT", "right", self.side == 1, CORAL)
         y += 58
         for i, (target, status) in enumerate(zip(arena.targets, self.status)):
             row, col = divmod(i, 3)
@@ -641,17 +981,23 @@ class ArenaUI:
         y += 188
         self.text("* failed weights / unavailable", sx + 12, y, 11, MUTED)
         y += 26
-        for dx, label, view in ((0, "LIFE", "organisms"), (90, "LAND", "territory"), (180, "PRESSURE", "pressure")):
-            self.button((sx + 10 + dx, y, 86, 27), label, ("view", view), self.view == view)
+        if arena.lesson:
+            self.text("GUIDED SOLO EXPERIMENT", sx + 12, y + 7, 12, AMBER)
+        else:
+            for dx, label, view in ((0, "LIFE", "organisms"), (90, "LAND", "territory"), (180, "PRESSURE", "pressure")):
+                self.button((sx + 10 + dx, y, 86, 27), label, ("view", view), self.view == view)
         y += 42
         rules = (["Held land sets the lead. Pressure", "claims it; dead land turns neutral."] if arena.mode == "hard" else
                  ["Living cells set the comparison.", "Independent growth; no land capture."])
         if arena.duel:
             rules = ["Each scored tick adds held cells." if arena.mode == "hard" else "Scored ticks add living cells.",
                      f"First {arena.duel_config.warmup_ticks} ticks: growth warmup."]
+        elif arena.lesson:
+            rules = self.lesson_instruction()
         for i, text in enumerate(rules):
             self.text(text, sx + 12, y + i * 18, 13, MUTED, 262)
-        help_lines = (["Edits locked / D: return to lab", "Cultures start a new round.", "Space: pause / N: step / R: rematch"] if arena.duel else
+        help_lines = (["R: restart / G: exit lesson", "Space: pause / N: single tick", "Target: living-cell count"] if arena.lesson else
+                      ["Edits locked / D: return to lab", "Cultures start a new round.", "Space: pause / N: step / R: rematch"] if arena.duel else
                       [f"Click: damage [{self.radius}]  /  [ ]: size", "Shift-click: L seed / Right: R seed", "Space: pause / N: step / C: clear"])
         for i, line in enumerate(help_lines):
             self.text(line, sx + 12, y + 46 + i * 17, 13, TEXT, 262)
@@ -659,6 +1005,26 @@ class ArenaUI:
     def action(self, action):
         arena = self.arena
         reset = False
+        if action == "lesson":
+            if arena.lesson:
+                warning = arena.stop_lesson()
+                if self.lesson_prior_speed is not None:
+                    self.speed = self.lesson_prior_speed
+                self.lesson_prior_speed = None
+                self.paused = False
+                self.message = warning or "Back in a fresh lab. Plant, damage, and explore freely."
+            else:
+                self.lesson_prior_speed = self.speed
+                arena.start_lesson()
+                self.speed, self.side = 1, 0
+                self.paused = True
+                self.message = "A guided 48 × 48 solo experiment: plant, cut, and observe."
+            self.view = "organisms"
+            self.refresh(reset=True)
+            return
+        if action == "lesson_primary":
+            self.lesson_primary()
+            return
         if isinstance(action, tuple):
             if action[0] == "view":
                 if arena.mode == "soft" and action[1] != "organisms":
@@ -685,11 +1051,20 @@ class ArenaUI:
             self.refresh()
             return
         if action == "pause":
+            if arena.lesson:
+                if arena.lesson.phase == "injured":
+                    self.lesson_primary()
+                    return
+                if not arena.lesson.can_step:
+                    self.notice(" ".join(self.lesson_instruction()), AMBER)
+                    return
             if arena.duel and arena.duel.finished:
                 self.notice("Round complete. R replays this seed; NEXT SEED starts another.", AMBER)
                 return
             self.paused = not self.paused
-            self.notice(("Paused. N advances one tick; duel edits stay locked." if arena.duel else
+            self.lesson_credit = 0.0
+            self.notice(("Paused. N advances one tick; guided edits stay locked." if arena.lesson else
+                         "Paused. N advances one tick; duel edits stay locked." if arena.duel else
                          "Paused. Editing still works; N advances one tick.") if self.paused else "Simulation resumed.")
         elif action == "reset":
             arena.reset()
@@ -698,11 +1073,16 @@ class ArenaUI:
             reset = True
             self.message = "Replaying the same seed."
         elif action == "duel":
-            arena.set_duel(not arena.duel_enabled)
+            if arena.lesson and self.lesson_prior_speed is not None:
+                self.speed = self.lesson_prior_speed
+                self.lesson_prior_speed = None
+            warning = arena.set_duel(not arena.duel_enabled)
             self.paused, reset = False, True
             self.message = ("Duel started. Hold more land over time; edits are locked." if arena.mode == "hard" else
                             "Growth duel started. Sustain more living cells; edits are locked.") if arena.duel else \
                            "Back in the lab. Plant, damage, and explore freely."
+            if warning:
+                self.message = warning
         elif action == "next_seed":
             if not arena.duel or not arena.duel.finished:
                 return
@@ -716,12 +1096,24 @@ class ArenaUI:
                 if not self.result_visible and self.result_rect:
                     self.stale_result_rect = self.result_rect.copy()
         elif action == "step":
+            if arena.lesson and arena.lesson.phase == "injured":
+                if self.lesson_gate_pending:
+                    return
+                arena.watch_lesson()
+                self.lesson_gate_pending = True
             self.paused = True
+            self.lesson_credit = 0.0
             advanced = arena.step()
-            self.notice("Advanced exactly one simulation tick." if advanced else "Round complete. R starts a rematch.")
+            self.notice("Advanced exactly one simulation tick." if advanced else
+                        " ".join(self.lesson_instruction()) if arena.lesson else "Round complete. R starts a rematch.")
         elif action == "speed":
             self.speed = 1 if self.speed == 8 else self.speed * 2
+            if arena.lesson and arena.lesson.phase == "recover":
+                self.notice(f"Slow observation: {6 * self.speed} simulation ticks per second. N inspects one tick.")
         elif action == "mode":
+            if arena.lesson:
+                self.notice("This lesson uses solo soft growth. G returns to the lab's rules.", AMBER)
+                return
             arena.mode = "soft" if arena.mode == "hard" else "hard"
             arena.reset()
             if arena.duel:
@@ -729,6 +1121,9 @@ class ArenaUI:
             self.view, reset = "organisms", True
             self.message = f"{arena.mode.title()} rules. Replaying the same seed."
         elif action == "clear":
+            if arena.lesson:
+                self.notice("R restarts the lesson; G returns to free planting and damage.", AMBER)
+                return
             if arena.duel:
                 self.notice("Duel edits are locked. BACK TO LAB restores planting and damage.", AMBER)
                 return
@@ -740,30 +1135,44 @@ class ArenaUI:
         elif action == "motion":
             self.reduced_motion = not self.reduced_motion
         elif action in ("left", "right"):
-            self.side = 0 if action == "left" else 1
+            self.side = 0 if arena.lesson or action == "left" else 1
         self.refresh(reset=reset)
 
     def event(self, event):
         pg, arena = self.pg, self.arena
         if event.type == pg.QUIT or (event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE):
             return False
+        # SDL can queue a complete Shift-click before this frame is handled.
+        # Polling get_mods alone would then see the already-released key.
+        if event.type == pg.KEYDOWN and event.key in (pg.K_LSHIFT, pg.K_RSHIFT):
+            self.held_shift_keys.add(event.key)
+        elif event.type == pg.KEYUP and event.key in (pg.K_LSHIFT, pg.K_RSHIFT):
+            self.held_shift_keys.discard(event.key)
+        elif event.type == pg.WINDOWFOCUSLOST:
+            self.held_shift_keys.clear()
         if event.type == pg.VIDEORESIZE:
             self.window = pg.display.set_mode((max(860, event.w), max(740, event.h)), pg.RESIZABLE)
             self.draw(dt=0)  # Subsequent clicks in this event batch use current geometry.
         if event.type == pg.KEYDOWN:
             mapping = {pg.K_SPACE: "pause", pg.K_r: "reset", pg.K_n: "step", pg.K_c: "clear",
                        pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed", pg.K_f: "motion",
-                       pg.K_d: "duel"}
-            if event.key == pg.K_RETURN and arena.duel and arena.duel.finished:
-                self.action("reset")
+                       pg.K_d: "duel", pg.K_g: "lesson"}
+            if event.key == pg.K_RETURN:
+                if arena.lesson:
+                    self.action("lesson_primary")
+                elif arena.duel and arena.duel.finished:
+                    self.action("reset")
             if event.key in mapping:
                 self.action(mapping[event.key])
             elif event.key in (pg.K_LEFTBRACKET, pg.K_RIGHTBRACKET):
-                self.radius = clamp(self.radius + (1 if event.key == pg.K_RIGHTBRACKET else -1), 1, arena.size)
+                if arena.lesson:
+                    self.notice("The lesson previews an exact safe cut. G restores the free damage brush.", AMBER)
+                else:
+                    self.radius = clamp(self.radius + (1 if event.key == pg.K_RIGHTBRACKET else -1), 1, arena.size)
             elif pg.K_1 <= event.key <= pg.K_9:
                 index = event.key - pg.K_1
                 if index < len(arena.targets):
-                    self.side = 1 if event.mod & pg.KMOD_SHIFT else 0
+                    self.side = 0 if arena.lesson else 1 if event.mod & pg.KMOD_SHIFT else 0
                     self.action(("target", index))
         if event.type == pg.MOUSEBUTTONDOWN:
             if self.stale_result_rect and self.stale_result_rect.collidepoint(event.pos):
@@ -783,7 +1192,7 @@ class ArenaUI:
                 y = clamp(int((event.pos[1] - self.board.y) * arena.size / self.board.height), 0, arena.size - 1)
                 if event.button == 3:
                     self.interact(x, y, 1)
-                elif event.button == 1 and pg.key.get_mods() & pg.KMOD_SHIFT:
+                elif event.button == 1 and (self.held_shift_keys or pg.key.get_mods() & pg.KMOD_SHIFT):
                     self.interact(x, y, 0)
                 elif event.button == 1:
                     self.interact(x, y)
@@ -800,8 +1209,9 @@ class ArenaUI:
                         break
                 if not running:
                     break
-                if not self.paused:
-                    self.arena.step(self.speed)
+                budget = self.step_budget(self.clock.get_time() / 1000.0)
+                if budget:
+                    self.arena.step(budget)
                 self.current_fps = self.clock.get_fps()
                 self.draw()
                 frames += 1
@@ -848,6 +1258,8 @@ def main(argv=None, default_mode="hard"):
     print(json.dumps(report, indent=2, allow_nan=False))
     if report["duel"] and not report["duel"]["valid"]:
         raise SystemExit(report["duel"]["invalid_reason"])
+    if report["lesson"] and not report["lesson"]["valid"]:
+        raise SystemExit(report["lesson"]["reason"])
     if not report["finite"]:
         raise SystemExit("Simulation produced non-finite state; check the selected checkpoints.")
 

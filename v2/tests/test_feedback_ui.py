@@ -246,6 +246,27 @@ class FeedbackUIIntegrationTests(unittest.TestCase):
             self.assertEqual(fill.x, background.x)
             self.assertLess(fill.width, background.width / 2)
 
+    def test_queued_shift_click_keeps_modifiers_until_keyup_and_clears_on_focus_loss(self):
+        center = self.ui.board.center
+        click = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=center, button=1)
+        with patch.object(self.ui, "interact") as interact, \
+                patch("pygame.key.get_mods", return_value=0):
+            for key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
+                self.ui.event(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
+            self.ui.event(click)
+            self.assertEqual(interact.call_args.args, (8, 8, 0))
+            self.ui.event(pygame.event.Event(pygame.KEYUP, key=pygame.K_LSHIFT, mod=0))
+            self.ui.event(click)
+            self.assertEqual(interact.call_args.args, (8, 8, 0))
+            self.ui.event(pygame.event.Event(pygame.KEYUP, key=pygame.K_RSHIFT, mod=0))
+            self.ui.event(click)
+            self.assertEqual(interact.call_args.args, (8, 8))
+            self.ui.event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_LSHIFT, mod=0))
+            self.ui.event(pygame.event.Event(pygame.WINDOWFOCUSLOST))
+            self.ui.event(click)
+            self.assertEqual(interact.call_args.args, (8, 8))
+            self.assertEqual(self.ui.held_shift_keys, set())
+
     def test_large_score_places_metric_below_number(self):
         # Exercise a valid 256-square board's maximum text count without an
         # expensive simulation. This test isolates scoreboard typography.

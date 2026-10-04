@@ -1,4 +1,4 @@
-"""Measure exact-pixel raster savings against the pre-optimization arena.
+"""Reproduce exact-pixel raster savings between the two measured revisions.
 
     python v2/verification/benchmark_raster_ui.py --output raster-efficiency.json
 
@@ -31,15 +31,16 @@ import arena as current
 from clash import list_targets
 
 BASELINE_COMMIT = "a31d6c84ae3cd3d77f7436e54b4d1e817f5f14f5"
+OPTIMIZED_COMMIT = "87a4d5ba7fbaa54e1f0707662ca7116051237920"
 
 
-def baseline_module():
+def revision_module(ref):
     source = subprocess.run(
-        ["git", "show", f"{BASELINE_COMMIT}:v2/arena.py"], cwd=V2_ROOT.parent,
+        ["git", "show", f"{ref}:v2/arena.py"], cwd=V2_ROOT.parent,
         text=True, capture_output=True, check=True).stdout
     module = types.ModuleType("arena_before_raster_optimization")
     module.__file__ = str(V2_ROOT / "arena.py")
-    exec(compile(source, f"<arena@{BASELINE_COMMIT}>", "exec"), module.__dict__)
+    exec(compile(source, f"<arena@{ref}>", "exec"), module.__dict__)
     return module
 
 
@@ -110,12 +111,16 @@ def main(argv=None):
     parser.add_argument("--frames", type=positive_int, default=30)
     parser.add_argument("--repeats", type=positive_int, default=4)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--after-ref", default=OPTIMIZED_COMMIT,
+                        help="optimized Git revision, or current for the working tree")
     options = parser.parse_args(argv)
-    before, runs = baseline_module(), []
+    before = revision_module(BASELINE_COMMIT)
+    after = current if options.after_ref == "current" else revision_module(options.after_ref)
+    runs = []
     for repeat in range(options.repeats):
         for width in ((1100, 860) if repeat % 2 == 0 else (860, 1100)):
             for speed in ((1, 8) if repeat % 2 == 0 else (8, 1)):
-                versions = ((before, "before"), (current, "after"))
+                versions = ((before, "before"), (after, "after"))
                 for module, version in (versions if repeat % 2 == 0 else tuple(reversed(versions))):
                     run = run_trial(module, version, width, speed, repeat, options.frames)
                     runs.append(run)
@@ -136,7 +141,7 @@ def main(argv=None):
     for run in runs:
         del run["identities"], run["samples"]
     report = {"schema_version": 1, "benchmark": "petri-clash-raster-ui-sdl-dummy",
-              "baseline_commit": BASELINE_COMMIT, "synthetic_models": False,
+              "baseline_commit": BASELINE_COMMIT, "after_ref": options.after_ref, "synthetic_models": False,
               "scope": "Shipped heart/star checkpoints on CPU with one Torch thread. SDL dummy raster only; "
                        "no native display, compositor, vsync, event handling or FPS pacing. "
                        "No action effects are active. Both revisions draw the exact same scene. "

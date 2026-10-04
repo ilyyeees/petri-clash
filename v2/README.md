@@ -40,6 +40,26 @@ Short, time-based visual easing smooths the board without changing cell ownershi
 
 Damage creates a crater pulse and reports the exact number of living cells erased on each side. Planting creates a side-colored seed marker, and the action result remains below the board. Effects use wall time and finish even while paused; scores update immediately. Use **F / FX ON-OFF** or `--reduced-motion` to disable easing and moving effects. Recent score deltas are observed net changes, not guessed kill/capture attribution, and cover the displayed number of simulation ticks.
 
+## Try the regrowth lesson
+
+Press **G / LESSON** or launch `python v2/clash.py --device cpu --lesson` for an optional guided experiment:
+
+1. Plant at the marked crosshair with **Shift-click or Enter**.
+2. Watch one culture grow for exactly 160 ticks. **Space** pauses and **N** steps.
+3. Inspect a highlighted cut selected to remove 25–60% of its living cells. **Click the cut or Enter** to apply it once.
+4. The injured field pauses. **Space / Enter** starts slow observation; **N** inspects one tick.
+5. The experiment stops when living-cell count stays at or above 90% of its pre-cut count for 24 ticks, or after 160 recovery ticks.
+
+![Paused regrowth experiment](verification/lesson-injured.png)
+
+Recovery plays at six simulation ticks per second at 1× while the interface keeps rendering at the configured frame rate. Speed changes multiply that observation rate; they do not alter the count goal or RNG. The final panel retains the before/cut/current counts and tick-based result. This measures living-cell count, not exact shape or color restoration.
+
+The lesson uses a fresh 48×48 solo soft-growth field. No invisible opponent is stepped. Safe practice cuts remove all state channels in the marked disk; if no suitable cut exists, the lesson says so without applying one. Free editing and rule changes stay locked while it is active. **R** or culture selection restarts, **G / EXIT LESSON** returns to a fresh lab with its previous grid/rules/speed, and **D / START DUEL** begins a fresh duel. The sandbox and duels still start normally unless the lesson is explicitly chosen.
+
+The lesson is interactive, so `--lesson` cannot be combined with `--duel` or `--headless-frames`. An active lesson's snapshot is included in the normal `--report` output on exit. Keyboard equivalents, persistent instructions and static preview cues work with reduced motion; native screen-reader support is not claimed. See the [lesson verification and design references](verification/lesson.md).
+
+Direct `--lesson` startup loads only its selected culture. When returning to two-culture play, the requested opponent is loaded then. If that checkpoint is unavailable, a visible notice explains that both sides now use the current loaded culture; you can choose another ready right-side culture in the lab.
+
 ## Seeded duels
 
 Press **D / START DUEL** for a complete round, or launch with `--duel`. The default round runs for **600 simulation ticks**: 60 ticks of unscored growth, then 540 scoring ticks. Every scoring tick adds each side's held cells in hard mode, or living cells in soft mode. The higher integer total wins; an exact tie is a draw. The HUD shows the average across scored ticks, current cells, and ticks remaining. The result also shows the exact **cell-tick** totals: scoring rewards sustained growth rather than only the final board.
@@ -90,6 +110,8 @@ Soft mode keeps both organisms independent. Switch modes with **M** or the mode 
 | Advance one tick and pause | N or STEP |
 | Replay the same seed | R or RESET |
 | Start a duel / return to sandbox | D or START DUEL / BACK TO LAB |
+| Start / exit the regrowth lesson | G or LESSON / EXIT LESSON |
+| Apply the lesson's current action | Enter or the highlighted lesson button |
 | Rematch a completed duel | Enter, R or REMATCH |
 | Play a completed duel with the next seed | NEXT SEED |
 | Cycle 1× / 2× / 4× / 8× speed | Tab or speed button |

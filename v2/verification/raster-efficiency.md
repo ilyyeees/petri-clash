@@ -48,4 +48,6 @@ python -m compileall -q v2
 python v2/verification/benchmark_raster_ui.py --output raster-efficiency.json
 ```
 
+The default comparison is pinned to the measured baseline and optimized revision `87a4d5ba7fbaa54e1f0707662ca7116051237920`, so later UI features do not invalidate this historical pixel-equivalence check. `--after-ref current` explicitly compares the working tree instead; intentional interface changes can then fail pixel equality.
+
 SDL dummy measures raster work, not native display/compositor behavior, vsync, input-to-display latency, or FPS pacing. Timed scenes have no active action effects. Median draw cost improved in all four configurations, but tail latency is noisy and did not improve in every case. Simulation dominates 8× play, and total unpaced-frame time does not consistently improve; this is not a claimed simulation or universal gameplay-FPS speedup.
