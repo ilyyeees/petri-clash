@@ -18,7 +18,7 @@ python v2/clash.py --device cpu
 
 Alternatively, the existing `v2/environment.yml` conda environment remains available. On Apple silicon, install the normal PyTorch wheel rather than the CPU-specific index; `--device auto` selects MPS when available. GPU paths are retained but this upgrade was verified on CPU only.
 
-Start with heart versus star. The visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. Sun is usable but noticeably weaker than the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
+Start with heart versus star. By default, the visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. Sun is usable but noticeably weaker than the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
 
 ```bash
 python v2/clash.py --list-models
@@ -27,6 +27,10 @@ python v2/soft_clash.py --device cpu              # free growth, no territory ex
 ```
 
 There is no hidden bootstrap training or silent untrained fallback. Researchers can explicitly inspect failed or unverified weights using `--allow-unhealthy`, or request training with `--bootstrap-steps N`. An explicitly selected checkpoint seed must exist and pass the health filter unless overridden.
+
+`--left-seed N` and `--right-seed N` pin checkpoint selection for each side. The picker shows **CHECKPOINT AUTO** or **CHECKPOINT PIN N** for the selected side, and its tiles reflect that exact selection policy. Pins remain in place when choosing another culture. `--list-models` lists automatic choices without these side-specific pins. The separate **SIM SEED** label controls stochastic match replay; it is not a checkpoint identifier.
+
+The line below the field identifies the actual loaded left/right checkpoint seeds and their health. Research overrides keep failed/unverified models visibly labeled; allowing a model does not make it ready. If leaving a lesson needs a temporary opponent fallback, the notice identifies what was actually loaded and preserves the original right-side pin for subsequent choices. See the [checkpoint-picker verification](verification/checkpoint-picker.md).
 
 ## Interface direction
 
@@ -58,7 +62,7 @@ The lesson uses a fresh 48×48 solo soft-growth field. No invisible opponent is 
 
 The lesson is interactive, so `--lesson` cannot be combined with `--duel` or `--headless-frames`. An active lesson's snapshot is included in the normal `--report` output on exit. Keyboard equivalents, persistent instructions and static preview cues work with reduced motion; native screen-reader support is not claimed. See the [lesson verification and design references](verification/lesson.md).
 
-Direct `--lesson` startup loads only its selected culture. When returning to two-culture play, the requested opponent is loaded then. If that checkpoint is unavailable, a visible notice explains that both sides now use the current loaded culture; you can choose another ready right-side culture in the lab.
+Direct `--lesson` startup loads only its selected culture. When returning to two-culture play, the requested opponent is loaded then. If that checkpoint is unavailable, a visible notice identifies the current loaded culture used on both sides. The original right-side checkpoint pin is kept, so subsequent right-side choices still honor it.
 
 ## Seeded duels
 

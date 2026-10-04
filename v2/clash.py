@@ -85,16 +85,26 @@ def discover_v2_checkpoint(target_path, preferred_seed=None, allow_unhealthy=Fal
     return candidates[0][2] if candidates else None
 
 
-def target_status(target_path):
-    checkpoint = discover_v2_checkpoint(target_path)
-    if checkpoint is not None:
-        return {"status": "ready", "score": seed_score(checkpoint.parents[1]),
-                "seed": seed_number(checkpoint.parents[1]), "checkpoint": str(checkpoint)}
-    unchecked = discover_v2_checkpoint(target_path, allow_unhealthy=True)
-    return {"status": checkpoint_health(unchecked.parents[1]) if unchecked else "missing",
-            "score": seed_score(unchecked.parents[1]) if unchecked else None,
-            "seed": seed_number(unchecked.parents[1]) if unchecked else None,
-            "checkpoint": str(unchecked) if unchecked else None}
+def target_status(target_path, preferred_seed=None, allow_unhealthy=False):
+    """Describe the exact selection policy without loading or training a model.
+
+    Health remains independent of eligibility: an unhealthy override can make a
+    collapsed or unverified checkpoint selectable, but never makes it ready.
+    Rejected selections retain the same seed pin when looking up diagnostics.
+    """
+    checkpoint = discover_v2_checkpoint(target_path, preferred_seed, allow_unhealthy)
+    selectable = checkpoint is not None
+    if checkpoint is None:
+        checkpoint = discover_v2_checkpoint(target_path, preferred_seed, allow_unhealthy=True)
+    if checkpoint is None:
+        return {"status": "missing", "score": None, "seed": None,
+                "checkpoint": None, "selectable": False}
+    seed_dir = checkpoint.parents[1]
+    score = seed_score(seed_dir)
+    return {"status": checkpoint_health(seed_dir),
+            "score": score if math.isfinite(score) else None,
+            "seed": seed_number(seed_dir), "checkpoint": str(checkpoint),
+            "selectable": selectable}
 
 
 def load_v2_model(checkpoint_path, device):
@@ -142,12 +152,24 @@ def ensure_model(target_path, device, bootstrap_steps=0, preferred_seed=None, al
             pool_size=1024 if device == "cuda" else 256, no_compile=True, no_amp=device != "cuda",
         )
     if checkpoint is None:
-        status = target_status(target_path)["status"]
+        status = target_status(target_path, preferred_seed, allow_unhealthy)["status"]
         seed_text = f" seed {preferred_seed}" if preferred_seed is not None else ""
+        if preferred_seed is None:
+            guidance = (
+                "Choose a ready organism with --list-models, train it explicitly, "
+                "or use --allow-unhealthy to inspect failed/unverified weights."
+            )
+        else:
+            guidance = (
+                "Change or remove the checkpoint seed pin, or choose a culture "
+                f"with a usable checkpoint at seed {preferred_seed}. "
+                "--list-models shows automatic choices without seed pins. "
+                "Train this seed explicitly, or use --allow-unhealthy to inspect "
+                "existing failed/unverified weights."
+            )
         raise ValueError(
             f"No usable checkpoint for {Path(target_path).stem}{seed_text} ({status}). "
-            "Choose a ready organism with --list-models, train it explicitly, "
-            "or use --allow-unhealthy to inspect failed/unverified weights."
+            f"{guidance}"
         )
     bundle = load_v2_model(checkpoint, device)
     bundle["health"] = checkpoint_health(checkpoint.parents[1])

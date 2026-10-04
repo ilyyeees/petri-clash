@@ -18,6 +18,20 @@ from trainer.common import pick_device
 from duel import DuelConfig, DuelRound
 
 
+def checkpoint_caption(bundle):
+    """Short loaded identity; never substitute a catalog's best checkpoint."""
+    seed = bundle.get("seed_dir")
+    if (isinstance(seed, str) and seed.startswith("seed_") and seed[5:].isascii()
+            and seed[5:].isdecimal() and len(seed[5:]) <= 10):
+        seed = f"{int(seed[5:]):03d}"
+    else:
+        seed = "?"
+    health = bundle.get("health", "unverified")
+    if health not in ("ready", "collapsed", "unverified", "missing"):
+        health = "unverified"
+    return f"seed {seed} {health}"
+
+
 class Arena:
     def __init__(self, args, targets):
         self.args, self.targets = args, targets
@@ -39,7 +53,9 @@ class Arena:
             self.start_lesson()
 
     def load(self, index, seed=None):
-        key = index, seed
+        # A bundle accepted under a research override must not bypass a later
+        # healthy-only selection, even when a caller changes the policy.
+        key = index, seed, bool(self.args.allow_unhealthy)
         if key not in self.cache:
             # NCA construction initializes CPU parameters before weights load.
             # A malformed checkpoint must not change an ongoing match's RNG
@@ -108,8 +124,9 @@ class Arena:
                 except (ValueError, RuntimeError, OSError, IndexError):
                     name = self.left["name"].split("_", 1)[-1]
                     self.right, self.right_index = self.left, self.left_index
-                    self.args.right_seed = self.args.left_seed
-                    warning = f"Requested opponent unavailable. Both sides use {name}; choose a ready right culture."
+                    pin = self.args.right_seed
+                    policy = "Auto selection kept." if pin is None else f"Pin {pin:03d} kept."
+                    warning = f"Right unavailable; using {name} {checkpoint_caption(self.left)}. {policy}"
                 self._deferred_right = False
             self.mode, self.args.grid_size = self.lesson_origin
             self.lesson, self.lesson_origin = None, None
@@ -437,7 +454,9 @@ class ArenaUI:
             "DejaVu Sans Condensed,Arial,sans" if s in (18, 22, 28) else "DejaVu Sans,Arial,sans",
             s, bold=s in (18, 22, 28, 36)) for s in (11, 12, 13, 14, 16, 18, 22, 28, 36)}
         self.button_font = pygame.font.SysFont("DejaVu Sans Condensed,Arial,sans", 13, bold=True)
-        self.status = [target_status(t) for t in arena.targets]
+        self.status = []
+        self._picker_status_cache = {}
+        self._picker_status_key = None
         # Picker tiles stay 28px at every window size; prepare them once.
         self.thumbs = [pygame.transform.smoothscale(
             pygame.image.load(str(t)).convert_alpha(), (28, 28)) for t in arena.targets]
@@ -474,6 +493,32 @@ class ArenaUI:
             self.speed = 1
         self.refresh(reset=True)
 
+    def picker_policy(self):
+        side = 0 if self.arena.lesson else self.side
+        pin = self.arena.args.left_seed if side == 0 else self.arena.args.right_seed
+        return pin, bool(self.arena.args.allow_unhealthy)
+
+    def refresh_picker_status(self, *, force=False):
+        """Read selection-aware metadata on policy changes, never every frame."""
+        key = self.picker_policy()
+        if force:
+            self._picker_status_cache.clear()
+            self._picker_status_key = None
+        if key != self._picker_status_key:
+            if key not in self._picker_status_cache:
+                pin, allow_unhealthy = key
+                self._picker_status_cache[key] = [
+                    target_status(target, preferred_seed=pin, allow_unhealthy=allow_unhealthy)
+                    for target in self.arena.targets]
+            self.status = self._picker_status_cache[key]
+            self._picker_status_key = key
+
+    def loaded_checkpoint_summary(self):
+        left = f"L {checkpoint_caption(self.arena.left)}"
+        if self.arena.lesson:
+            return left
+        return f"{left} / R {checkpoint_caption(self.arena.right)}"
+
     def text(self, text, x, y, size=14, color=TEXT, width=None):
         text = str(text)
         if width is not None:
@@ -496,6 +541,7 @@ class ArenaUI:
         self.buttons.append((rect, action))
 
     def refresh(self, reset=False):
+        self.refresh_picker_status()
         self.stats_cache = self.arena.stats()
         if reset:
             if self.result_rect and self.result_visible and self.duel_snapshot and self.duel_snapshot["finished"]:
@@ -918,7 +964,7 @@ class ArenaUI:
                     "BACK TO LAB" if arena.duel else "START DUEL", "duel", bool(arena.duel))
         self.button((self.board.right - 220, 22, 104, 27),
                     "EXIT LESSON" if arena.lesson else "LESSON / G", "lesson", bool(arena.lesson))
-        self.text(f"SEED {arena.args.seed:03d}", sx + 12, 23, 12, AMBER)
+        self.text(f"SIM SEED {arena.args.seed:03d}", sx + 12, 23, 12, AMBER)
         self.text(f"TICK {arena.steps:05d} / {self.current_fps:.0f} FPS", sx + 12, 47, 11, MUTED)
         x = bx
         finished = bool(arena.duel and arena.duel.finished)
@@ -986,7 +1032,8 @@ class ArenaUI:
                     f"Count recovered after {lesson['recovery_ticks']} ticks: {lesson['baseline']} before / {lesson['remaining_after_cut']} cut / {lesson['current']} now."
                     if lesson["phase"] == "complete" else instruction[0])
             self.text(text, x, y, 12, TEXT, width)
-            self.text(instruction[1] + "  /  G: exit lesson", x, y + 22, 11, MUTED, width)
+            self.text(self.loaded_checkpoint_summary() + " / " + instruction[1] + " / G: exit",
+                      x, y + 22, 11, MUTED if self.arena.left.get("health") == "ready" else CORAL, width)
             return
         if self.notices:
             text, color, _ = self.notices[-1]
@@ -998,13 +1045,21 @@ class ArenaUI:
             self.text(status, x, y, 12, TEXT, width)
         st = self.stats_cache
         neutral = self.arena.size ** 2 - (st["left_territory"] or 0) - (st["right_territory"] or 0)
-        text = f"{neutral:,} neutral / {st['contested']} overlapping / {self.arena.args.device.upper()}" if self.arena.mode == "hard" else f"{st['contested']} overlapping / independent growth / {self.arena.args.device.upper()}"
-        self.text(text, x, y + 22, 11, MUTED, width)
+        text = (f"{neutral:,} neutral / {st['contested']} overlap" if self.arena.mode == "hard" else
+                f"{st['contested']} overlap / independent growth")
+        text = f"{self.loaded_checkpoint_summary()} / {text} / {self.arena.args.device.upper()}"
+        healthy = all(bundle.get("health") == "ready" for bundle in (self.arena.left, self.arena.right))
+        self.text(text, x, y + 22, 11, MUTED if healthy else CORAL, width)
 
     def draw_sidebar(self, sx, y, sidebar):
         pg, arena = self.pg, self.arena
+        self.refresh_picker_status()
+        selected_side = 0 if arena.lesson else self.side
         pg.draw.line(self.window, BORDER, (sx + 12, y - 9), (sx + sidebar - 12, y - 9))
         self.text("CULTURES", sx + 12, y, 12, AMBER)
+        pin, allow_unhealthy = self.picker_policy()
+        policy = "CHECKPOINT AUTO" if pin is None else f"CHECKPOINT PIN {pin:03d}"
+        self.text(policy, sx + sidebar - 12 - self.fonts[11].size(policy)[0], y + 1, 11, MUTED)
         if arena.lesson:
             self.text("SOLO CULTURE / 1–9 RESTARTS", sx + 12, y + 27, 11, MUTED)
         else:
@@ -1016,12 +1071,12 @@ class ArenaUI:
             row, col = divmod(i, 3)
             r = pg.Rect(sx + 10 + col * 90, y + row * 62, 86, 57)
             ready = status["status"] == "ready"
-            active = i == (arena.left_index if self.side == 0 else arena.right_index)
+            active = i == (arena.left_index if selected_side == 0 else arena.right_index)
             hover = r.collidepoint(pg.mouse.get_pos())
             fill = (53, 63, 61) if active else ((48, 57, 60) if hover else (27, 33, 35))
             pg.draw.rect(self.window, fill, r)
             if active:
-                pg.draw.rect(self.window, GREEN if self.side == 0 else CORAL, r, 1)
+                pg.draw.rect(self.window, GREEN if selected_side == 0 else CORAL, r, 1)
             thumb = self.thumbs[i]
             thumb.set_alpha(255 if ready else 60)
             self.window.blit(thumb, (r.x + 29, r.y + 2))
@@ -1032,7 +1087,8 @@ class ArenaUI:
             self.window.blit(name_surface, name_surface.get_rect(center=(r.centerx, r.y + 42)))
             self.buttons.append((r, ("target", i)))
         y += 188
-        self.text("* failed weights / unavailable", sx + 12, y, 11, MUTED)
+        self.text("* failed / missing (research mode)" if allow_unhealthy else
+                  "* failed weights / unavailable", sx + 12, y, 11, MUTED)
         y += 26
         if arena.lesson:
             self.text("GUIDED SOLO EXPERIMENT", sx + 12, y + 7, 12, AMBER)
@@ -1057,6 +1113,7 @@ class ArenaUI:
 
     def action(self, action):
         arena = self.arena
+        self.refresh_picker_status()
         reset = False
         if action == "lesson":
             if arena.lesson:
@@ -1089,18 +1146,27 @@ class ArenaUI:
                                  "pressure": "PRESSURE: green favors left; coral favors right. Brightness shows strength."}[self.view])
             else:
                 try:
-                    arena.select(action[1], self.side)
+                    side = 0 if arena.lesson else self.side
+                    arena.select(action[1], side)
                     if arena.duel:
                         self.paused = False
+                    self.refresh_picker_status(force=True)
                     self.refresh(reset=True)
-                    self.notice("Culture loaded. Replaying the same seed.")
+                    bundle = arena.left if side == 0 else arena.right
+                    name = bundle["name"].split("_", 1)[-1]
+                    self.notice(f"{'Left' if side == 0 else 'Right'} {name}: {checkpoint_caption(bundle)}. Simulation seed replayed.",
+                                TEXT if bundle.get("health") == "ready" else CORAL)
                 except (ValueError, RuntimeError, OSError) as exc:
-                    status = self.status[action[1]]["status"]
-                    if status != "ready":
+                    self.refresh_picker_status(force=True)
+                    info = self.status[action[1]]
+                    status = info["status"]
+                    if not info.get("selectable", status == "ready"):
                         name = arena.targets[action[1]].stem.split("_", 1)[-1].title()
-                        self.notice(f"{name}: {status} checkpoint. Choose a ready culture.")
+                        pin, _ = self.picker_policy()
+                        selection = "checkpoint" if pin is None else f"seed {pin:03d}"
+                        self.notice(f"{name}: {status} {selection}. Choose a ready culture.", AMBER)
                     else:
-                        self.notice(str(exc))
+                        self.notice(str(exc), CORAL)
             self.refresh()
             return
         if action == "pause":
