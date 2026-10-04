@@ -64,6 +64,18 @@ See the [duel verification report](verification/duels.md) for screenshots, regre
 
 This addition applies the explicit-objective and readable-outcome direction of [Subset's Into the Breach](https://www.subsetgames.com/itb.html), with a one-action start/rematch following the [Game Accessibility Guidelines' quick-start recommendation](https://gameaccessibilityguidelines.com/allow-the-game-to-be-started-without-the-need-to-navigate-through-multiple-levels-of-menus/). The cellular simulation remains Petri Clash's own; it does not imitate turn-based combat or promise perfect information.
 
+## Compare both sides
+
+One round can depend on which side a culture starts on. The compact comparison command plays each seed twice, swaps the cultures, and adds each culture's exact cell-tick scores across both legs:
+
+```bash
+python v2/compare.py --left 1 --right 6 --seeds 0,7,42 --report comparison.json
+```
+
+Here **A** is heart and **B** is flower in both orientations. The default is six CPU rounds; `--mode soft`, `--round-ticks`, `--warmup-ticks`, and explicit checkpoint seeds are supported. No training or window is started. The terminal identifies the selected cultures and checkpoint seeds; the optional JSON retains every leg, configuration, paired totals, and side-swap outcome changes without host paths.
+
+These are small seeded comparisons, not calibrated rankings. In the measured heart/flower example, seed 7 changes winning culture after the swap; combining both legs favors flower. Failed or invalid rounds stop the comparison without assigning an overall winner. See the [comparison guide and verification](verification/compare.md).
+
 ## The upgraded rules
 
 Hard mode now lets neutral frontier cells retain their hidden developmental state while ownership accumulates. This fixes organisms that grew in training but immediately stalled or died under the previous ownership mask. Opponent-owned cells still suppress enemy hidden tissue; simultaneous proposals and sign-aware hysteresis keep captures symmetric. Abandoned land loses ownership, and nonfinite cells are quarantined.

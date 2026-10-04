@@ -27,4 +27,5 @@ jobs:
       - run: python -m pytest v2/tests -q
       - run: python v2/clash.py --device cpu --headless-frames 32 --report /tmp/match.json
       - run: python v2/clash.py --device cpu --duel --round-ticks 32 --warmup-ticks 8 --headless-frames 40 --report /tmp/duel.json
+      - run: python v2/compare.py --left 1 --right 6 --seeds 7 --round-ticks 32 --warmup-ticks 8 --report /tmp/comparison.json
       - run: python v2/benchmark.py --steps 20 --warmup 5 --output /tmp/benchmark.json
