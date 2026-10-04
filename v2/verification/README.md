@@ -2,6 +2,7 @@
 
 Verification for the cumulative v2 improvements:
 
+- [Checkpoint and export reliability](reliability.md): malformed-file recovery, exact final snapshots and integrated compatibility checks
 - [Mouse-only lab tools](lab-tools.md): visible planting, damage, radius and clear controls with shared pointer previews
 - [Checkpoint picker consistency](checkpoint-picker.md): side-specific seed pins, honest loaded identity, and lesson fallback intent
 - [Portable duel recipes](duel-recipes.md): saving completed rounds, bounded CPU reruns, and explicit score checks
@@ -54,6 +55,10 @@ Heart seed 000 versus star seed 001, starting at (20,24)/(28,24), 48×48, seed 4
 This validates ongoing interaction and recovery, not strategic learning or balanced win rates. [Raw combat measurements](combat.json).
 
 ### Measured CPU thread policy
+
+The public historical reports below omit checkpoint and state fingerprints. Their
+original timings and configurations are retained; local benchmark output still
+includes those identifiers for private reproducibility checks.
 
 Matched runs of the **new** hard engine: same 24-channel/256-hidden heart/star models, same 48×48 grid and initial positions, RNG seed 0, 20 warmup ticks excluded, 100 timed ticks. Loading, rendering, event handling, frame pacing, and final diagnostics are excluded.
 

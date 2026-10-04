@@ -1438,6 +1438,10 @@ class ArenaUI:
                     break
                 self.clock.tick(self.arena.args.fps)
             if self.arena.args.snapshot:
+                # Quit may follow an edit/step in the same event batch. Export
+                # the final state and HUD, without an older interpolated frame.
+                self.blend.reset()
+                self.draw(dt=0)
                 self.arena.args.snapshot.parent.mkdir(parents=True, exist_ok=True)
                 self.pg.image.save(self.window, str(self.arena.args.snapshot))
         finally:

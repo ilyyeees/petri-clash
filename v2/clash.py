@@ -2,6 +2,8 @@ import argparse
 import json
 import random
 import math
+from collections.abc import Mapping
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
@@ -59,8 +61,11 @@ def checkpoint_health(seed_dir):
     threshold = 0.2
     try:
         config = json.loads((seed_dir / "resolved_config.json").read_text())
-        threshold = float(config.get("stop", {}).get("collapsed_score", threshold))
-    except (OSError, ValueError, TypeError):
+        if isinstance(config, Mapping):
+            stop = config.get("stop", {})
+            if isinstance(stop, Mapping):
+                threshold = float(stop.get("collapsed_score", threshold))
+    except (OSError, ValueError, TypeError, OverflowError):
         pass
     if not math.isfinite(threshold) or threshold <= 0:
         threshold = 0.2
@@ -107,32 +112,100 @@ def target_status(target_path, preferred_seed=None, allow_unhealthy=False):
             "selectable": selectable}
 
 
+def _play_config_number(section, key, *, integer=False, minimum=None, maximum=None):
+    """Validate saved scalar settings before constructing a playable model."""
+    value = section.get(key)
+    try:
+        if isinstance(value, bool) or not isinstance(value, (Real, str)):
+            raise ValueError("expected a numeric scalar")
+        number = int(value) if integer else float(value)
+        if integer and not isinstance(value, str) and number != value:
+            raise ValueError("expected an integer")
+        if not integer and not math.isfinite(number):
+            raise ValueError("expected a finite number")
+        if minimum is not None and number < minimum:
+            raise ValueError(f"must be at least {minimum}")
+        if maximum is not None and number > maximum:
+            raise ValueError(f"must be at most {maximum}")
+    except (TypeError, ValueError, OverflowError) as exc:
+        expected = "an integer" if integer else "a finite number"
+        if minimum is not None:
+            expected += f" at least {minimum}"
+        if maximum is not None:
+            expected += f" and at most {maximum}"
+        # Conversion errors may include the entire malformed saved value.
+        # Keep picker notices bounded; retain that detail in the chained cause.
+        raise ValueError(f"invalid play checkpoint config {key}: expected {expected}") from exc
+    return number
+
+
+def _play_model_state(state_dict, channels, hidden_size):
+    """Check architecture metadata against weights before allocating an NCA."""
+    try:
+        state_dict = normalize_state_dict(state_dict)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid play checkpoint model state") from exc
+    shapes = {
+        "perception_filters": (channels * 3, 1, 3, 3),
+        "fc0.weight": (hidden_size, channels * 3, 1, 1),
+        "fc0.bias": (hidden_size,),
+        "fc1.weight": (channels, hidden_size, 1, 1),
+        "fc1.bias": (channels,),
+    }
+    if state_dict.keys() != shapes.keys():
+        raise ValueError("play checkpoint parameters do not match the NCA architecture")
+    for name, shape in shapes.items():
+        value = state_dict[name]
+        if not isinstance(value, torch.Tensor) or tuple(value.shape) != shape:
+            raise ValueError(f"play checkpoint parameter {name} does not match model config")
+    return state_dict
+
+
 def load_v2_model(checkpoint_path, device):
     checkpoint_path = Path(checkpoint_path)
     blob = load_checkpoint_file(checkpoint_path, device)
     config = checkpoint_config(blob, checkpoint_path=checkpoint_path)
-    if "model" not in config or "data" not in config:
-        raise ValueError(f"missing model/data config for {checkpoint_path}")
+    for section in ("model", "data", "train"):
+        if not isinstance(config.get(section, {} if section == "train" else None), Mapping):
+            raise ValueError(f"missing or invalid {section} config for {checkpoint_path}")
 
     model_cfg = config["model"]
+    channels = _play_config_number(model_cfg, "channels", integer=True, minimum=5)
+    hidden_size = _play_config_number(model_cfg, "hidden_size", integer=True, minimum=1)
+    fire_rate = _play_config_number(model_cfg, "fire_rate", minimum=0, maximum=1)
+    # Match the arena's minimum supported grid, including its seed margins.
+    tensor_limit = torch.iinfo(torch.int64).max
+    grid_size = _play_config_number(config["data"], "grid_size", integer=True,
+                                    minimum=8, maximum=tensor_limit)
+    state_dict = _play_model_state(blob["model"], channels, hidden_size)
+    # These are representation limits, not a promise that available memory can
+    # hold a large valid arena. Account for int64 ownership and the largest NCA
+    # feature map; let actual allocation/device failures propagate as before.
+    float_bytes = torch.finfo(torch.get_default_dtype()).bits // 8
+    bytes_per_cell = max(8, float_bytes * max(channels * 3, hidden_size))
+    if grid_size * grid_size > tensor_limit // bytes_per_cell:
+        raise ValueError("invalid play checkpoint config grid_size: tensor storage exceeds the signed 64-bit limit")
     channels_last = bool(config.get("train", {}).get("channels_last", False))
     model = NCA(
-        channels=int(model_cfg["channels"]),
-        hidden_size=int(model_cfg["hidden_size"]),
-        fire_rate=float(model_cfg["fire_rate"]),
+        channels=channels,
+        hidden_size=hidden_size,
+        fire_rate=fire_rate,
     ).to(device)
 
     if channels_last and device == "cuda":
         model = model.to(memory_format=torch.channels_last)
 
-    load_model_state(model, blob["model"])
+    load_model_state(model, state_dict)
     model.eval()
-    score = float(blob.get("score", seed_score(checkpoint_path.parents[1])))
+    try:
+        score = float(blob.get("score", seed_score(checkpoint_path.parents[1])))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"invalid checkpoint score: {checkpoint_path}") from exc
 
     return {
         "model": model,
-        "channels": int(model_cfg["channels"]),
-        "grid_size": int(config["data"]["grid_size"]),
+        "channels": channels,
+        "grid_size": grid_size,
         "channels_last": channels_last,
         "kind": "v2",
         "source": str(checkpoint_path),

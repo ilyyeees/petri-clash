@@ -39,6 +39,12 @@ def normalize_state_dict(state_dict):
         normalized[plain_key] = value
     metadata = getattr(state_dict, "_metadata", None)
     if metadata is not None:
+        if not isinstance(metadata, Mapping):
+            raise ValueError("state dict metadata must be a mapping")
+        for key, value in metadata.items():
+            _plain_key(key)  # Validate names before sorting compile wrappers.
+            if not isinstance(value, Mapping):
+                raise ValueError("state dict module metadata must be a mapping")
         normalized._metadata = OrderedDict()
         for key in sorted(metadata, key=lambda name: name.count("_orig_mod")):
             normalized._metadata[_plain_key(key)] = copy.deepcopy(metadata[key])
@@ -85,11 +91,17 @@ def load_checkpoint_file(path, map_location="cpu"):
     There is deliberately no automatic ``weights_only=False`` fallback.
     """
     try:
-        blob = torch.load(path, map_location=map_location, weights_only=True)
-    except pickle.UnpicklingError as exc:
-        if "numpy" not in str(exc).lower():
-            raise
-        blob = _load_legacy_numpy_checkpoint(path, map_location)
+        try:
+            blob = torch.load(path, map_location=map_location, weights_only=True)
+        except pickle.UnpicklingError as exc:
+            if "numpy" not in str(exc).lower():
+                raise
+            blob = _load_legacy_numpy_checkpoint(path, map_location)
+    except (EOFError, pickle.UnpicklingError, IndexError) as exc:
+        # Restricted unpickling can report truncated/unsupported input through
+        # several exception types. Keep one recoverable input-error boundary,
+        # including the legacy attempt, without hiding I/O or resource errors.
+        raise ValueError(f"invalid or unsupported NCA checkpoint: {path}") from exc
     if not isinstance(blob, Mapping) or "model" not in blob:
         raise ValueError(f"not an NCA checkpoint (missing model state): {path}")
     if not isinstance(blob["model"], Mapping):

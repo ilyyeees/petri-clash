@@ -7,3 +7,6 @@ bundles_v2/
 *.tar.gz
 v2/weights/*/seed_*/checkpoints/latest.pt
 /duels/
+
+# Optional experiments from the documented training example.
+/v2/user-weights/

@@ -276,8 +276,9 @@ class UnsupportedCheckpointValue:
 def test_loader_does_not_fall_back_to_unrestricted_pickle(tmp_path):
     path = tmp_path / "invalid.pt"
     torch.save({"model": {}, "unsupported": UnsupportedCheckpointValue()}, path)
-    with pytest.raises(pickle.UnpicklingError):
+    with pytest.raises(ValueError) as failure:
         load_checkpoint_file(path)
+    assert isinstance(failure.value.__cause__, pickle.UnpicklingError)
 
 
 def test_all_distributed_checkpoints_are_loadable():

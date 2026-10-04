@@ -6,7 +6,9 @@ Two independently trained neural cellular automata grow, collide, and regenerate
 
 ## Play on CPU, without retraining
 
-From the repository root, using Python 3.11 or newer:
+From the repository root, using Python 3.11 or newer. On Apple silicon, replace
+the CPU-index line below with `python -m pip install torch` (see the
+[official installation guide](https://pytorch.org/get-started/locally/)):
 
 ```bash
 python -m venv .venv
@@ -16,7 +18,7 @@ python -m pip install -r v2/requirements.txt
 python v2/clash.py --device cpu
 ```
 
-Alternatively, the existing `v2/environment.yml` conda environment remains available. On Apple silicon, install the normal PyTorch wheel rather than the CPU-specific index; `--device auto` selects MPS when available. GPU paths are retained but this upgrade was verified on CPU only.
+Alternatively, the existing `v2/environment.yml` conda environment remains available. `--device auto` selects MPS on Apple silicon when available. GPU paths are retained but this upgrade was verified on CPU only.
 
 Start with heart versus star. By default, the visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. Sun is usable but noticeably weaker than the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
 
@@ -181,7 +183,9 @@ python v2/clash.py --device cpu --seed 42 --headless-frames 256 \
 python v2/soft_clash.py --device cpu --headless-frames 256
 ```
 
-`--headless-frames N` advances exactly N simulation ticks in the sandbox, or up to the duel's endpoint when `--duel` is enabled. It does not initialize SDL, create a window, render frames, or sleep to hit a frame rate. An optional snapshot renders only the final board via Pillow. `--report` records model sources, seed, rules, cell counts, territory, elapsed time, device, and duel status. `--snapshot` in interactive mode captures the complete window on exit. `--ui-frames N` bounds an interactive smoke run.
+`--headless-frames N` advances exactly N simulation ticks in the sandbox, or up to the duel's endpoint when `--duel` is enabled. It does not initialize SDL, create a window, render frames, or sleep to hit a frame rate. An optional snapshot renders only the final board via Pillow. `--report` records model sources, seed, rules, cell counts, territory, elapsed time, device, and duel status. `--snapshot` in interactive mode captures the complete window on exit, freshly rendered from the final state rather than an older interpolated frame. `--ui-frames N` bounds an interactive smoke run.
+
+Ordinary match and benchmark reports contain local checkpoint paths; benchmarks also contain checkpoint and final-state fingerprints. Review and sanitize them before sharing. Portable comparison, recipe and replay-check reports omit those paths and fingerprints.
 
 The same seed, model, settings, device, software versions, and action sequence replay the same match. Reset restores the simulation seed. Cross-device or cross-version bitwise equality is not promised. `--left-pos x,y` and `--right-pos x,y` override starting positions; use `--grid-size N` to change the arena size.
 
@@ -206,13 +210,16 @@ Ordinary CPU inference now reuses the first convolution's temporary activation f
 
 ```bash
 cd v2
-python train.py --target targets/01_heart.png --steps 3000 --device cpu
-python -m trainer.eval_v2 --run-dir weights/01_heart/seed_000 --device cpu
+python train.py --target targets/01_heart.png --steps 3000 --device cpu \
+  --no-compile --no-amp --export-root user-weights
+python -m trainer.eval_v2 --run-dir user-weights/01_heart/seed_000 --device cpu
 ```
 
-Training is optional and may be slow on CPU. The [trainer guide](trainer/README.md) covers large runs. Evaluation now uses the saved architecture, data, and evaluation configuration, with explicit device overrides. Plain and `torch.compile` checkpoints work in play, evaluation, and resume. Existing exported weights are supported unchanged. New saves are atomic; resumable pool state keeps its original precision, so latest checkpoints can be larger than before.
+Training is optional and may be slow on CPU. The example exports to `v2/user-weights/`, keeping the bundled playable weights intact. Omitting `--export-root` uses `weights` and replaces the matching culture/seed export, which can change gameplay and saved-recipe results. The arena still selects from bundled `weights`; an experiment in `user-weights` is not automatically activated.
 
-Checkpoint loading uses PyTorch's restricted `weights_only` loader, with a narrow compatibility allowlist for historical NumPy RNG state. Only load checkpoints you trust. GPU execution and large training sweeps were not performed for this upgrade.
+The [trainer guide](trainer/README.md) covers large runs. Evaluation now uses the saved architecture, data, and evaluation configuration, with explicit device overrides. Plain and `torch.compile` checkpoints work in play, evaluation, and resume. Existing exported weights are supported unchanged. Trainer checkpoint writes are atomic; the separate export-copy operation is not transactional. Resumable pool state keeps its original precision, so latest checkpoints can be larger than before.
+
+Checkpoint loading uses PyTorch's restricted `weights_only` loader, with a narrow compatibility allowlist for historical NumPy RNG state. Malformed play metadata and expected restricted-loader failures produce a recoverable selection error, retaining the current match. See the [reliability checks](verification/reliability.md). Only load checkpoints you trust. GPU execution and large training sweeps were not performed for this upgrade.
 
 See the [feedback verification report](verification/feedback.md) for UI coverage, reproducible screenshots and measured presentation overhead.
 

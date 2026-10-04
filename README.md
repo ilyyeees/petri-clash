@@ -7,6 +7,10 @@ Two neural cellular automata grow, collide, and regenerate on a shared grid.
 
 Quick start (Python 3.11+):
 
+On Apple silicon, use `python -m pip install torch` instead of the CPU-index
+command below. For other platforms, the [official PyTorch installer](https://pytorch.org/get-started/locally/)
+can select a compatible wheel.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate

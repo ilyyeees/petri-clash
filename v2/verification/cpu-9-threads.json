@@ -30,8 +30,7 @@
       "fire_rate": 0.5,
       "parameters": 24856,
       "dtype": "torch.float32",
-      "training_grid_size": 48,
-      "checkpoint_sha256": "e6822b52c3f9e7680c51c64b310620843b459cc283ddb5cf898b6616b77b7231"
+      "training_grid_size": 48
     },
     {
       "kind": "v2",
@@ -41,8 +40,7 @@
       "fire_rate": 0.5,
       "parameters": 24856,
       "dtype": "torch.float32",
-      "training_grid_size": 48,
-      "checkpoint_sha256": "99ebdd07e2c647cf11fbc164eb0db6481ef1ef9e468d75a9bea48734e07bc076"
+      "training_grid_size": 48
     }
   ],
   "initial_positions": [
@@ -81,17 +79,16 @@
   "final_state": [
     {
       "alive_cells": 242,
-      "finite": true,
-      "sha256": "30821569d1f741dbc15a197f4f92eb538aac219e21e58a9e44f39dd9d4988a8c"
+      "finite": true
     },
     {
       "alive_cells": 181,
-      "finite": true,
-      "sha256": "f2d7e906b2e3b567d702a931141240abc88322ee2e2c43abea6af68b0f4e011f"
+      "finite": true
     }
   ],
   "final_owned_cells": [
     248,
     184
-  ]
+  ],
+  "publication_note": "Checkpoint and final-state fingerprints omitted from this public report; timing measurements and model configuration are unchanged."
 }
