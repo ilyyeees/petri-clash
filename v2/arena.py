@@ -474,6 +474,9 @@ class ArenaUI:
         self.saved_duel = None
         self.saved_duel_path = None
         self.board = pygame.Rect(0, 0, 1, 1)
+        self._scaled_board = None
+        self._scaled_board_rgb = None
+        self._scaled_board_size = None
         self.clock = pygame.time.Clock()
         self.stats_cache = arena.stats()
         self.current_fps = 0.0
@@ -1003,6 +1006,22 @@ class ArenaUI:
         finally:
             self.window.set_clip(previous_clip)
 
+    def board_surface(self, array):
+        """Reuse only identical paused rasters, leaving live drawing unchanged."""
+        pg = self.pg
+        if not self.paused:
+            self._scaled_board = self._scaled_board_rgb = self._scaled_board_size = None
+            surface = pg.surfarray.make_surface(array.swapaxes(0, 1))
+            return pg.transform.scale(surface, self.board.size)
+        size = self.board.size
+        # Compare the actual post-blend pixels: paused edits and easing still draw.
+        if self._scaled_board_size != size or not np.array_equal(array, self._scaled_board_rgb):
+            surface = pg.surfarray.make_surface(array.swapaxes(0, 1))
+            self._scaled_board = pg.transform.scale(surface, size)
+            self._scaled_board_rgb = array.copy()
+            self._scaled_board_size = size
+        return self._scaled_board
+
     def draw(self, dt=None):
         pg, arena = self.pg, self.arena
         now = time.perf_counter()
@@ -1055,8 +1074,7 @@ class ArenaUI:
         array = arena.rgb(self.team_colors, self.view)
         key = (arena.mode, self.view, self.team_colors, arena.size)
         array = self.blend.reset(array, key=key) if self.reduced_motion else self.blend.update(array, dt, key=key)
-        surface = pg.surfarray.make_surface(array.swapaxes(0, 1))
-        self.window.blit(pg.transform.scale(surface, self.board.size), self.board)
+        self.window.blit(self.board_surface(array), self.board)
         self.draw_effects()
         if arena.lesson:
             self.draw_lesson_cue()

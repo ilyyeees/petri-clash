@@ -206,6 +206,8 @@ The UI also avoids empty full-board effect overlays and prepares the fixed-size 
 
 Ordinary CPU inference now reuses the first convolution's temporary activation for ReLU. With the shipped heart/star and heart/flower models, this reduced median simulation-tick latency by **24–32%** in the measured one-thread runs; four complete seeded duels retained bitwise-identical state and RNG at every tick. Training, accelerator, `torch.compile`, custom-layer and activation-hook paths retain the original allocation behavior. See the [inference-efficiency report and reproducible benchmark](verification/inference-efficiency.md) for timings, safeguards and limits; hardware-dependent simulation gains are not a universal FPS guarantee.
 
+Paused fields now reuse one scaled image only while its final pixels and size stay identical. This reduced warm, settled paused-lab drawing time by about **10–16%** in measured SDL runs; live frames retain the original rendering path. Editing, easing, effects and resize behavior remain pixel-exact. See the [frozen-board rendering and Python 3.13 verification](verification/frozen-board-rendering.md).
+
 ## Training and checkpoint portability
 
 ```bash
