@@ -44,6 +44,27 @@ Short, time-based visual easing smooths the board without changing cell ownershi
 
 Damage creates a crater pulse and reports the exact number of living cells erased on each side. Planting creates a side-colored seed marker, and the action result remains below the board. Effects use wall time and finish even while paused; scores update immediately. Use **F / FX ON-OFF** or `--reduced-motion` to disable easing and moving effects. Recent score deltas are observed net changes, not guessed kill/capture attribution, and cover the displayed number of simulation ticks.
 
+## Edit the lab with the mouse
+
+The sandbox's **LEFT-CLICK TOOL** row has **DAMAGE**, **PLANT LEFT** and
+**PLANT RIGHT**. Choose a tool, then click the field. **− / +** change the damage
+radius, and **CLEAR / C** empties the field. Planting always places one seed;
+the cut radius does not make it larger. Pause first if you want to inspect each
+edit before growth resumes.
+
+The pointer shows the actual cell and tool: a crater circle for damage, or a
+crosshair marked **L / R** for planting. Text and static markers remain with
+**FX OFF**. **Shift-click** temporarily plants left and **right-click** temporarily
+plants right without changing the selected tool. Damage is selected on startup.
+After switching back from another window, release and press Shift again before
+using that shortcut; the visible tools do not require a modifier key.
+
+Tool selection is independent of **FOR LEFT / FOR RIGHT**, which selects the
+culture slot to replace. Switching tools does not load models, change checkpoint
+pins or advance the simulation. Clear and replay keep your tool; returning from
+a lesson or duel starts a fresh lab with damage selected. Lab edits remain
+locked in lessons and scored duels. See the [lab controls verification](verification/lab-tools.md).
+
 ## Try the regrowth lesson
 
 Press **G / LESSON** or launch `python v2/clash.py --device cpu --lesson` for an optional guided experiment:
@@ -144,10 +165,10 @@ Soft mode keeps both organisms independent. Switch modes with **M** or the mode 
 | Life / land / pressure view | Sidebar buttons |
 | Select a culture | Click FOR LEFT / FOR RIGHT, then a tile |
 | Select left / right with keyboard | 1–9 / Shift+1–9 |
-| Damage crater | Left-click the arena |
-| Plant a left / right seed | Shift+left-click / right-click |
-| Change crater radius | [ / ] |
-| Clear the arena | C |
+| Damage crater | DAMAGE, then left-click the arena (default tool) |
+| Plant a left / right seed | PLANT LEFT / PLANT RIGHT, then left-click; or Shift+left-click / right-click |
+| Change crater radius | − / + or [ / ] |
+| Clear the arena | CLEAR / C or C |
 | Exit | Esc |
 
 The sidebar and title never receive grid clicks. Paused controls, repeated selection, damage, manual planting, and resizing are covered by CPU tests.

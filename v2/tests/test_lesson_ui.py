@@ -420,8 +420,11 @@ class LessonUIIntegrationTests(LessonTestCase):
         self.ui.event(pygame.event.Event(pygame.KEYDOWN, key=key, mod=mod))
 
     def click(self, pos, button=1, shift=False):
-        with patch("pygame.key.get_mods", return_value=pygame.KMOD_SHIFT if shift else 0):
-            self.ui.event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=pos, button=button))
+        if shift:
+            self.ui.event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_LSHIFT, mod=pygame.KMOD_LSHIFT))
+        self.ui.event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=pos, button=button))
+        if shift:
+            self.ui.event(pygame.event.Event(pygame.KEYUP, key=pygame.K_LSHIFT, mod=0))
 
     def cell(self, x, y):
         return (self.ui.board.x + round((x + .5) * self.ui.board.width / self.world.size),

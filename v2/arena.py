@@ -461,6 +461,7 @@ class ArenaUI:
         self.thumbs = [pygame.transform.smoothscale(
             pygame.image.load(str(t)).convert_alpha(), (28, 28)) for t in arena.targets]
         self.paused, self.side, self.view = False, 0, "organisms"
+        self.pointer_tool = "damage"
         self.speed, self.radius = arena.args.steps_per_frame, arena.args.crater_radius
         self.team_colors = arena.args.team_colors
         self.reduced_motion = arena.args.reduced_motion
@@ -492,6 +493,8 @@ class ArenaUI:
         if arena.lesson:
             self.speed = 1
         self.refresh(reset=True)
+        if not arena.lesson and not arena.duel and self.radius != arena.args.crater_radius:
+            self.notice(f"Damage radius limited to {self.radius} cells for this field.", AMBER)
 
     def picker_policy(self):
         side = 0 if self.arena.lesson else self.side
@@ -542,6 +545,8 @@ class ArenaUI:
 
     def refresh(self, reset=False):
         self.refresh_picker_status()
+        if not self.arena.lesson and not self.arena.duel:
+            self.radius = clamp(self.radius, 1, self.arena.size)
         self.stats_cache = self.arena.stats()
         if reset:
             if self.result_rect and self.result_visible and self.duel_snapshot and self.duel_snapshot["finished"]:
@@ -595,6 +600,28 @@ class ArenaUI:
         self.saved_duel, self.saved_duel_path = self.arena.duel, path
         self.notice(f"Saved duel: {path.name}", AMBER)
         print(f"Saved duel recipe: {path}", file=sys.stderr)
+
+    def effective_pointer_tool(self, button=1):
+        """Resolve temporary shortcuts without changing the persistent lab tool."""
+        if button == 3:
+            return "plant_right"
+        if button != 1:
+            return None
+        if self.held_shift_keys:
+            return "plant_left"
+        # Guided/scored play retains its original click contract, even when
+        # lab rectangles or a previously selected planting tool still exist.
+        if self.arena.lesson or self.arena.duel:
+            return "damage"
+        return self.pointer_tool
+
+    def pointer_cell(self, pos):
+        """Use the same discrete field location for preview and dispatch."""
+        return (clamp(int((pos[0] - self.board.x) * self.arena.size / self.board.width), 0, self.arena.size - 1),
+                clamp(int((pos[1] - self.board.y) * self.arena.size / self.board.height), 0, self.arena.size - 1))
+
+    def change_radius(self, delta):
+        self.radius = clamp(self.radius + delta, 1, self.arena.size)
 
     def interact(self, x, y, side=None):
         """Apply one input, then report its real immediate effect, even paused."""
@@ -938,6 +965,44 @@ class ArenaUI:
             overlay.blit(label, (tx, ty))
         self.window.blit(overlay, self.board)
 
+    def draw_pointer_preview(self):
+        pg, arena = self.pg, self.arena
+        mouse = pg.mouse.get_pos()
+        if arena.duel or arena.lesson or not self.board.collidepoint(mouse):
+            return
+        tool = self.effective_pointer_tool(3 if pg.mouse.get_pressed()[2] else 1)
+        x, y = self.pointer_cell(mouse)
+        scale = self.board.width / arena.size
+        center = (round(self.board.x + (x + .5) * scale),
+                  round(self.board.y + (y + .5) * scale))
+        # Large craters and edge markers must not paint over the instrument rail.
+        previous_clip = self.window.get_clip()
+        self.window.set_clip(self.board)
+        try:
+            if tool == "damage":
+                pg.draw.circle(self.window, AMBER, center, max(3, round(self.radius * scale)), 1)
+                pg.draw.circle(self.window, AMBER, center, 2)
+            else:
+                color, label = (GREEN, "L") if tool == "plant_left" else (CORAL, "R")
+                radius = max(5, round(scale * .4))
+                pg.draw.circle(self.window, color, center, radius, 1)
+                pg.draw.line(self.window, color, (center[0] - radius - 3, center[1]),
+                             (center[0] + radius + 3, center[1]), 1)
+                pg.draw.line(self.window, color, (center[0], center[1] - radius - 3),
+                             (center[0], center[1] + radius + 3), 1)
+                marker = self.fonts[12].render(label, True, color)
+                label_x = clamp(center[0] + radius + 5, self.board.left + 2,
+                                self.board.right - marker.get_width() - 2)
+                label_y = clamp(center[1] - radius - marker.get_height() - 2,
+                                # Leave the inset status/size captions readable near the top edge.
+                                self.board.top + 11 + self.fonts[11].get_height() + 4,
+                                self.board.bottom - marker.get_height() - 2)
+                backdrop = pg.Rect(label_x - 2, label_y, marker.get_width() + 4, marker.get_height())
+                pg.draw.rect(self.window, BG, backdrop)
+                self.window.blit(marker, (label_x, label_y))
+        finally:
+            self.window.set_clip(previous_clip)
+
     def draw(self, dt=None):
         pg, arena = self.pg, self.arena
         now = time.perf_counter()
@@ -1001,11 +1066,7 @@ class ArenaUI:
                 (self.board.right + 1, self.board.bottom + 1, -1, -1)):
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x + dx * 7, corner_y), 1)
             pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x, corner_y + dy * 7), 1)
-        mouse = pg.mouse.get_pos()
-        if self.board.collidepoint(mouse) and not arena.duel and not arena.lesson:
-            planting = bool(pg.key.get_mods() & pg.KMOD_SHIFT)
-            radius = max(3, round((1 if planting else self.radius) * self.board.width / arena.size))
-            pg.draw.circle(self.window, GREEN if planting else AMBER, mouse, radius, 1)
+        self.draw_pointer_preview()
         # Inset labels identify the field without a rounded dashboard badge.
         label = (f"LESSON / {arena.lesson.phase.upper()}" if arena.lesson else self.duel_headline() if arena.duel else
                  "PAUSED / N TO STEP" if self.paused else f"{self.view.upper()} / {arena.mode.upper()}")
@@ -1096,6 +1157,21 @@ class ArenaUI:
             for dx, label, view in ((0, "LIFE", "organisms"), (90, "LAND", "territory"), (180, "PRESSURE", "pressure")):
                 self.button((sx + 10 + dx, y, 86, 27), label, ("view", view), self.view == view)
         y += 42
+        if not arena.duel and not arena.lesson:
+            self.text("Held land leads; dead land turns neutral." if arena.mode == "hard" else
+                      "Living cells lead; growth is independent.", sx + 12, y, 11, MUTED, 262)
+            self.text("LEFT-CLICK TOOL", sx + 12, y + 19, 11, AMBER)
+            for dx, width, label, tool, color in (
+                    (10, 70, "DAMAGE", "damage", AMBER),
+                    (84, 90, "PLANT LEFT", "plant_left", GREEN),
+                    (178, 98, "PLANT RIGHT", "plant_right", CORAL)):
+                self.button((sx + dx, y + 36, width, 27), label, ("tool", tool),
+                            self.pointer_tool == tool, color)
+            self.button((sx + 10, y + 69, 26, 27), "−", ("radius", -1))
+            self.text(f"CUT RADIUS {self.radius}", sx + 42, y + 76, 11, TEXT, 88)
+            self.button((sx + 134, y + 69, 26, 27), "+", ("radius", 1))
+            self.button((sx + 176, y + 69, 100, 27), "CLEAR / C", "clear")
+            return
         rules = (["Held land sets the lead. Pressure", "claims it; dead land turns neutral."] if arena.mode == "hard" else
                  ["Living cells set the comparison.", "Independent growth; no land capture."])
         if arena.duel:
@@ -1106,8 +1182,7 @@ class ArenaUI:
         for i, text in enumerate(rules):
             self.text(text, sx + 12, y + i * 18, 13, MUTED, 262)
         help_lines = (["R: restart / G: exit lesson", "Space: pause / N: single tick", "Target: living-cell count"] if arena.lesson else
-                      ["Edits locked / D: return to lab", "Cultures start a new round.", "Space: pause / N: step / R: rematch"] if arena.duel else
-                      [f"Click: damage [{self.radius}]  /  [ ]: size", "Shift-click: L seed / Right: R seed", "Space: pause / N: step / C: clear"])
+                      ["Edits locked / D: return to lab", "Cultures start a new round.", "Space: pause / N: step / R: rematch"])
         for i, line in enumerate(help_lines):
             self.text(line, sx + 12, y + 46 + i * 17, 13, TEXT, 262)
 
@@ -1118,6 +1193,7 @@ class ArenaUI:
         if action == "lesson":
             if arena.lesson:
                 warning = arena.stop_lesson()
+                self.pointer_tool = "damage"
                 if self.lesson_prior_speed is not None:
                     self.speed = self.lesson_prior_speed
                 self.lesson_prior_speed = None
@@ -1136,6 +1212,25 @@ class ArenaUI:
             self.lesson_primary()
             return
         if isinstance(action, tuple):
+            if action[0] in ("tool", "radius"):
+                if arena.lesson or arena.duel:
+                    self.notice("Lab tools are locked. Return to LAB for planting and damage.", AMBER)
+                    return
+                if action[0] == "tool":
+                    if action[1] in ("damage", "plant_left", "plant_right"):
+                        self.pointer_tool = action[1]
+                        if self.pointer_tool == "damage":
+                            self.notice("Left-click damages. Shift-click: left seed; right-click: right seed.", AMBER)
+                        else:
+                            left = self.pointer_tool == "plant_left"
+                            bundle = arena.left if left else arena.right
+                            name = bundle["name"].split("_", 1)[-1].upper()
+                            self.notice(f"Click plants {'LEFT' if left else 'RIGHT'} / {name}. Shift-click: L; right-click: R.",
+                                        GREEN if left else CORAL)
+                else:
+                    self.change_radius(action[1])
+                    self.notice(f"Cut radius {self.radius}: affects damage only. Planting stays one seed.", AMBER)
+                return
             if action[0] == "view":
                 if arena.mode == "soft" and action[1] != "organisms":
                     self.notice("Land and pressure views are available in hard mode.")
@@ -1196,6 +1291,8 @@ class ArenaUI:
                 self.speed = self.lesson_prior_speed
                 self.lesson_prior_speed = None
             warning = arena.set_duel(not arena.duel_enabled)
+            if not arena.duel:
+                self.pointer_tool = "damage"
             self.paused, reset = False, True
             self.message = ("Duel started. Hold more land over time; edits are locked." if arena.mode == "hard" else
                             "Growth duel started. Sustain more living cells; edits are locked.") if arena.duel else \
@@ -1251,7 +1348,7 @@ class ArenaUI:
                 return
             arena.clear()
             reset = True
-            self.message = "Arena cleared. Shift-click or right-click to plant new life."
+            self.message = "Arena cleared. Choose PLANT LEFT / PLANT RIGHT, then click the field."
         elif action == "colors":
             self.team_colors = not self.team_colors
         elif action == "motion":
@@ -1259,13 +1356,15 @@ class ArenaUI:
         elif action in ("left", "right"):
             self.side = 0 if arena.lesson or action == "left" else 1
         self.refresh(reset=reset)
+        if action == "clear":
+            self.notice(self.message)
 
     def event(self, event):
         pg, arena = self.pg, self.arena
         if event.type == pg.QUIT or (event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE):
             return False
-        # SDL can queue a complete Shift-click before this frame is handled.
-        # Polling get_mods alone would then see the already-released key.
+        # Process modifiers in event order. Current physical polling can see
+        # either a later press or release from this same drained SDL batch.
         if event.type == pg.KEYDOWN and event.key in (pg.K_LSHIFT, pg.K_RSHIFT):
             self.held_shift_keys.add(event.key)
         elif event.type == pg.KEYUP and event.key in (pg.K_LSHIFT, pg.K_RSHIFT):
@@ -1290,7 +1389,7 @@ class ArenaUI:
                 if arena.lesson:
                     self.notice("The lesson previews an exact safe cut. G restores the free damage brush.", AMBER)
                 else:
-                    self.radius = clamp(self.radius + (1 if event.key == pg.K_RIGHTBRACKET else -1), 1, arena.size)
+                    self.change_radius(1 if event.key == pg.K_RIGHTBRACKET else -1)
             elif pg.K_1 <= event.key <= pg.K_9:
                 index = event.key - pg.K_1
                 if index < len(arena.targets):
@@ -1310,14 +1409,12 @@ class ArenaUI:
                             self.stale_result_rect = old_result
                         return True
             if self.board.collidepoint(event.pos):
-                x = clamp(int((event.pos[0] - self.board.x) * arena.size / self.board.width), 0, arena.size - 1)
-                y = clamp(int((event.pos[1] - self.board.y) * arena.size / self.board.height), 0, arena.size - 1)
-                if event.button == 3:
-                    self.interact(x, y, 1)
-                elif event.button == 1 and (self.held_shift_keys or pg.key.get_mods() & pg.KMOD_SHIFT):
-                    self.interact(x, y, 0)
-                elif event.button == 1:
+                x, y = self.pointer_cell(event.pos)
+                tool = self.effective_pointer_tool(event.button)
+                if tool == "damage":
                     self.interact(x, y)
+                elif tool in ("plant_left", "plant_right"):
+                    self.interact(x, y, 0 if tool == "plant_left" else 1)
         return True
 
     def run(self):

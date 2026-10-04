@@ -217,8 +217,9 @@ class FeedbackUIIntegrationTests(unittest.TestCase):
     def test_shift_left_right_and_nonprimary_clicks_are_distinct(self):
         center = self.ui.board.center
         with patch.object(self.ui, "interact") as interact:
-            with patch("pygame.key.get_mods", return_value=pygame.KMOD_SHIFT):
-                self.ui.event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=center, button=1))
+            self.ui.event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_LSHIFT, mod=pygame.KMOD_LSHIFT))
+            self.ui.event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=center, button=1))
+            self.ui.event(pygame.event.Event(pygame.KEYUP, key=pygame.K_LSHIFT, mod=0))
             interact.assert_called_once_with(8, 8, 0)
             self.ui.event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=center, button=3))
             self.assertEqual(interact.call_args.args, (8, 8, 1))

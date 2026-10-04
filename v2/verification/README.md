@@ -2,6 +2,7 @@
 
 Verification for the cumulative v2 improvements:
 
+- [Mouse-only lab tools](lab-tools.md): visible planting, damage, radius and clear controls with shared pointer previews
 - [Checkpoint picker consistency](checkpoint-picker.md): side-specific seed pins, honest loaded identity, and lesson fallback intent
 - [Portable duel recipes](duel-recipes.md): saving completed rounds, bounded CPU reruns, and explicit score checks
 - [CPU inference efficiency](inference-efficiency.md): bounded activation reuse, exact replay checks, and paired latency measurements
