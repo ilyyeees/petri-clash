@@ -2,6 +2,7 @@
 
 Verification for the cumulative v2 improvements:
 
+- [Declared dependency floor](minimum-dependencies.md): exact minimum runtime stack and final suites on Python 3.11, 3.12 and 3.13
 - [Frozen-board rendering](frozen-board-rendering.md): exact paused-raster reuse, paired timing controls and fresh Python 3.13 verification
 - [Checkpoint and export reliability](reliability.md): malformed-file recovery, exact final snapshots and integrated compatibility checks
 - [Mouse-only lab tools](lab-tools.md): visible planting, damage, radius and clear controls with shared pointer previews

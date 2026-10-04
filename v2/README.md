@@ -236,3 +236,5 @@ python -m compileall -q v2
 ```
 
 The environment flag enables actual shipped-model growth checks; otherwise that slower check is skipped. CI runs the same CPU suite, plus headless and benchmark smoke runs. The workflow runs on both pull requests and pushes; see the pull request for the exact revision’s CI status.
+
+The declared runtime minimums were also installed and tested together on Python 3.11, alongside current-package Python 3.12 and 3.13 environments. See the [dependency-floor verification](verification/minimum-dependencies.md) for exact versions and platform limits.
