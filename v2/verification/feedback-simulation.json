@@ -1,0 +1,184 @@
+{
+  "purpose": "Matched simulation-only repeat before/after presentation changes; no simulation code changed. Host timings vary and are not evidence of a simulation speedup.",
+  "baseline_commit": "ab6e2bd061ee704147bbf9e628f4eb047e28ea7b",
+  "state_hashes_and_ownership_identical": true,
+  "before": {
+    "schema_version": 1,
+    "benchmark": "petri-clash-cpu-simulation",
+    "mode": "hard",
+    "synthetic": false,
+    "runtime": {
+      "device": "cpu",
+      "seed": 0,
+      "cpu_threads": 1,
+      "deterministic_algorithms": true,
+      "python_version": "3.12.14",
+      "torch_version": "2.14.1+cpu",
+      "numpy_version": "2.3.5"
+    },
+    "grid": {
+      "height": 48,
+      "width": 48,
+      "batch_size": 1
+    },
+    "models": [
+      {
+        "kind": "v2",
+        "source": "weights/01_heart/seed_000/checkpoints/best.pt",
+        "channels": 24,
+        "hidden_size": 256,
+        "fire_rate": 0.5,
+        "parameters": 24856,
+        "dtype": "torch.float32",
+        "training_grid_size": 48
+      },
+      {
+        "kind": "v2",
+        "source": "weights/02_star/seed_001/checkpoints/best.pt",
+        "channels": 24,
+        "hidden_size": 256,
+        "fire_rate": 0.5,
+        "parameters": 24856,
+        "dtype": "torch.float32",
+        "training_grid_size": 48
+      }
+    ],
+    "initial_positions": [
+      [
+        12,
+        24
+      ],
+      [
+        36,
+        24
+      ]
+    ],
+    "measurement": {
+      "unit": "one simulation step",
+      "includes": "neural update and battle rules",
+      "excludes": [
+        "model loading",
+        "warmup",
+        "rendering",
+        "event handling",
+        "FPS pacing",
+        "final diagnostics"
+      ]
+    },
+    "warmup_steps": 20,
+    "measured_steps": 120,
+    "step_ms": {
+      "min": 6.684832,
+      "p50": 7.8155195,
+      "p95": 10.8459667,
+      "max": 12.881567,
+      "mean": 8.108161683333334
+    },
+    "total_measured_ms": 972.979402,
+    "steps_per_second": 123.33251840001438,
+    "final_state": [
+      {
+        "alive_cells": 241,
+        "finite": true
+      },
+      {
+        "alive_cells": 183,
+        "finite": true
+      }
+    ],
+    "final_owned_cells": [
+      247,
+      186
+    ]
+  },
+  "after": {
+    "schema_version": 1,
+    "benchmark": "petri-clash-cpu-simulation",
+    "mode": "hard",
+    "synthetic": false,
+    "runtime": {
+      "device": "cpu",
+      "seed": 0,
+      "cpu_threads": 1,
+      "deterministic_algorithms": true,
+      "python_version": "3.12.14",
+      "torch_version": "2.14.1+cpu",
+      "numpy_version": "2.3.5"
+    },
+    "grid": {
+      "height": 48,
+      "width": 48,
+      "batch_size": 1
+    },
+    "models": [
+      {
+        "kind": "v2",
+        "source": "weights/01_heart/seed_000/checkpoints/best.pt",
+        "channels": 24,
+        "hidden_size": 256,
+        "fire_rate": 0.5,
+        "parameters": 24856,
+        "dtype": "torch.float32",
+        "training_grid_size": 48
+      },
+      {
+        "kind": "v2",
+        "source": "weights/02_star/seed_001/checkpoints/best.pt",
+        "channels": 24,
+        "hidden_size": 256,
+        "fire_rate": 0.5,
+        "parameters": 24856,
+        "dtype": "torch.float32",
+        "training_grid_size": 48
+      }
+    ],
+    "initial_positions": [
+      [
+        12,
+        24
+      ],
+      [
+        36,
+        24
+      ]
+    ],
+    "measurement": {
+      "unit": "one simulation step",
+      "includes": "neural update and battle rules",
+      "excludes": [
+        "model loading",
+        "warmup",
+        "rendering",
+        "event handling",
+        "FPS pacing",
+        "final diagnostics"
+      ]
+    },
+    "warmup_steps": 20,
+    "measured_steps": 120,
+    "step_ms": {
+      "min": 7.184964,
+      "p50": 8.255386,
+      "p95": 9.538967300000001,
+      "max": 11.151125,
+      "mean": 8.333762175
+    },
+    "total_measured_ms": 1000.051461,
+    "steps_per_second": 119.99382499777178,
+    "final_state": [
+      {
+        "alive_cells": 241,
+        "finite": true
+      },
+      {
+        "alive_cells": 183,
+        "finite": true
+      }
+    ],
+    "final_owned_cells": [
+      247,
+      186
+    ]
+  },
+  "publication_note": "Host-specific paths, unnecessary host metadata and file/state fingerprints omitted; equality verdict was computed before sanitization."
+}

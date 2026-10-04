@@ -1,5 +1,7 @@
 # CPU verification · Living arena upgrade
 
+For the newer tactical interface, live score and animation, see [arena feedback verification](feedback.md).
+
 Verified locally on 2026-10-04 against baseline commit `9a941a7c2b283d3acb586009dd14801174438761`. Python 3.12, CPU-only PyTorch 2.14.1. Existing model weights and `v1/` are unchanged.
 
 ## Regression coverage

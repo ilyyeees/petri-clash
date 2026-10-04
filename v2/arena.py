@@ -107,14 +107,15 @@ class Arena:
     def rgb(self, team_colors=False, view="organisms"):
         if view == "pressure" and self.mode == "hard":
             c = self.control[0, 0].detach().cpu()
-            rgb = torch.stack((c.clamp_min(0), c.abs() * .35, (-c).clamp_min(0)))
+            a, b = c.clamp_min(0), (-c).clamp_min(0)
+            rgb = torch.stack((a * .365 + b * .965, a * .886 + b * .518, a * .698 + b * .580))
         elif team_colors or view == "territory":
             a = self.a[0, 3].detach().cpu().clamp(0, 1)
             b = self.b[0, 3].detach().cpu().clamp(0, 1)
             if view == "territory" and self.mode == "hard":
                 a = (self.owner[0, 0].detach().cpu() == 1).float()
                 b = (self.owner[0, 0].detach().cpu() == 2).float()
-            rgb = torch.stack((a * .30 + b * .92, a * .88 + b * .44, a * .74 + b * .55)).clamp(0, 1)
+            rgb = torch.stack((a * .365 + b * .965, a * .886 + b * .518, a * .698 + b * .580)).clamp(0, 1)
         elif self.mode == "hard":
             rgba = compose_rgba(self.a, self.b, self.owner)[0].detach().cpu().clamp(0, 1)
             rgb = rgba[:3] * rgba[3:4]
@@ -152,6 +153,7 @@ def parse_args(argv=None, default_mode="hard"):
     parser.add_argument("--release-threshold", type=float, default=.12)
     parser.add_argument("--tie-margin", type=float, default=.01)
     parser.add_argument("--team-colors", action="store_true")
+    parser.add_argument("--reduced-motion", action="store_true", help="disable visual easing and moving effects")
     parser.add_argument("--crater-radius", type=int, default=4)
     parser.add_argument("--steps-per-frame", type=int, choices=(1, 2, 4, 8), default=1)
     parser.add_argument("--bootstrap-steps", type=int, default=0, help="explicitly opt into training missing weights")
@@ -188,175 +190,354 @@ def parse_args(argv=None, default_mode="hard"):
     return args
 
 
-BG, PANEL, BORDER = (12, 19, 23), (21, 32, 37), (44, 60, 64)
-TEXT, MUTED, GREEN, CORAL = (231, 238, 222), (142, 160, 159), (93, 226, 178), (246, 132, 148)
+BG, PANEL, BORDER = (23, 27, 29), (35, 42, 45), (65, 77, 80)
+TEXT, MUTED = (232, 228, 216), (169, 177, 175)
+GREEN, CORAL, AMBER = (93, 226, 178), (246, 132, 148), (217, 182, 111)
 
 
 class ArenaUI:
-    """Small native UI, no assets/downloads or renderer dependencies beyond pygame."""
+    """Presentation-only animation around an exact, seeded simulation."""
     def __init__(self, arena):
         import pygame
+        from feedback import FrameBlend, ScoreTracker
         self.pg, self.arena = pygame, arena
         pygame.display.init()
         pygame.font.init()
         width = max(860, arena.args.window_size)
         self.window = pygame.display.set_mode((width, max(740, int(width * .82))), pygame.RESIZABLE)
         pygame.display.set_caption("Petri Clash | Living arena")
-        self.fonts = {s: pygame.font.SysFont("DejaVu Sans", s) for s in (11, 12, 13, 14, 16, 18, 22, 28)}
+        self.fonts = {s: pygame.font.SysFont(
+            "DejaVu Sans Mono,Consolas,monospace" if s in (12, 36) else
+            "DejaVu Sans Condensed,Arial,sans" if s in (18, 22, 28) else "DejaVu Sans,Arial,sans",
+            s, bold=s in (18, 22, 28, 36)) for s in (11, 12, 13, 14, 16, 18, 22, 28, 36)}
+        self.button_font = pygame.font.SysFont("DejaVu Sans Condensed,Arial,sans", 13, bold=True)
         self.status = [target_status(t) for t in arena.targets]
         self.thumbs = [pygame.image.load(str(t)).convert_alpha() for t in arena.targets]
         self.paused, self.side, self.view = False, 0, "organisms"
-        self.speed = arena.args.steps_per_frame
-        self.radius = arena.args.crater_radius
+        self.speed, self.radius = arena.args.steps_per_frame, arena.args.crater_radius
         self.team_colors = arena.args.team_colors
+        self.reduced_motion = arena.args.reduced_motion
         self.message = "Grow. Collide. Regenerate."
         self.buttons = []
         self.board = pygame.Rect(0, 0, 1, 1)
         self.clock = pygame.time.Clock()
         self.stats_cache = arena.stats()
         self.current_fps = 0.0
+        self.blend = FrameBlend()
+        self.score = ScoreTracker()
+        self.effects = []
+        self.notices = []
+        self.last_draw = time.perf_counter()
+        self.elapsed = 0.0
+        self.refresh(reset=True)
 
-    def text(self, text, x, y, size=14, color=TEXT):
-        self.window.blit(self.fonts[size].render(str(text), True, color), (x, y))
+    def text(self, text, x, y, size=14, color=TEXT, width=None):
+        text = str(text)
+        if width is not None:
+            while text and self.fonts[size].size(text)[0] > width:
+                text = text[:-2] + "…" if len(text) > 1 else ""
+        self.window.blit(self.fonts[size].render(text, True, color), (x, y))
 
-    def button(self, rect, label, action, active=False, color=GREEN):
+    def button(self, rect, label, action, active=False, color=AMBER):
         pg = self.pg
         rect = pg.Rect(rect)
         hover = rect.collidepoint(pg.mouse.get_pos())
-        fill = (38, 65, 60) if active else ((32, 47, 51) if hover else PANEL)
-        pg.draw.rect(self.window, fill, rect, border_radius=7)
-        pg.draw.rect(self.window, color if active else BORDER, rect, 1, border_radius=7)
-        surface = self.fonts[12].render(label, True, color if active else TEXT)
+        fill = (63, 66, 59) if active else ((62, 72, 75) if hover else (52, 62, 66))
+        pg.draw.rect(self.window, fill, rect, border_radius=2)
+        pg.draw.line(self.window, color if active else (85, 95, 96), rect.topleft, (rect.right - 1, rect.top))
+        pg.draw.line(self.window, (12, 16, 18), rect.bottomleft, rect.bottomright)
+        if active:
+            pg.draw.rect(self.window, color, (rect.x, rect.y, 3, rect.height))
+        surface = self.button_font.render(label, True, color if active else TEXT)
         self.window.blit(surface, surface.get_rect(center=rect.center))
         self.buttons.append((rect, action))
 
-    def draw(self):
+    def refresh(self, reset=False):
+        self.stats_cache = self.arena.stats()
+        if reset:
+            from feedback import FrameBlend
+            self.blend = FrameBlend()
+            self.score.reset()
+            self.effects.clear()
+            self.notices.clear()
+        self.summary = self.score.update(self.stats_cache)
+
+    def notice(self, text, color=TEXT):
+        self.message = text
+        self.notices.append((text, color, self.elapsed))
+        self.notices = self.notices[-3:]
+
+    def interact(self, x, y, side=None):
+        """Apply one input, then report its real immediate effect, even paused."""
+        from feedback import FrameBlend
+        before = self.arena.stats()
+        if side is None:
+            self.arena.damage(x, y, self.radius)
+            after = self.arena.stats()
+            left = before["left_alive"] - after["left_alive"]
+            right = before["right_alive"] - after["right_alive"]
+            label = f"DAMAGE  L -{left} / R -{right} life"
+            color, radius, kind = (255, 209, 139), self.radius, "damage"
+            detail = f"Crater ({x}, {y}): left -{left}, right -{right} living cells."
+        else:
+            self.arena.plant(x, y, side)
+            label = "LEFT SEED +" if side == 0 else "RIGHT SEED +"
+            color, radius, kind = (GREEN if side == 0 else CORAL), 1, "plant"
+            detail = f"{'Left' if side == 0 else 'Right'} seed planted at ({x}, {y}). Growth needs simulation ticks."
+        self.effects.append({"x": x, "y": y, "radius": radius, "kind": kind,
+                             "color": color, "label": label, "born": self.elapsed})
+        self.effects = self.effects[-24:]
+        self.blend = FrameBlend()  # Edits are visible immediately, never ghosted over.
+        self.refresh()
+        self.notice(detail, color)
+
+    def draw_score(self, width):
+        pg, st = self.pg, self.stats_cache
+        sx, y = self.rail_x, 111
+        self.score_rect = pg.Rect(sx, y, 286, 181)
+        hard = self.arena.mode == "hard"
+        left, right = self.summary["left"], self.summary["right"]
+        self.text("HELD CELLS" if hard else "LIVING CELLS", sx + 12, y, 12, AMBER)
+        self.text("LIVE" if not self.paused else "PAUSED", sx + 222, y, 11, MUTED)
+        for side, value, color in ((0, left, GREEN), (1, right, CORAL)):
+            x = sx + 12 + side * 140
+            name = (self.arena.left if side == 0 else self.arena.right)["name"].split("_", 1)[-1]
+            self.text(f"{'L' if side == 0 else 'R'} / {name.upper()}", x, y + 24, 12, color, 126)
+            size = 36 if self.fonts[36].size(f"{value:,}")[0] <= 126 else 28
+            self.text(f"{value:,}", x - 2, y + 40, size, color, 128)
+            alive = st["left_alive" if side == 0 else "right_alive"]
+            pct = self.summary["percent"]["left" if side == 0 else "right"]
+            self.text(f"{pct:.1f}% held" if hard else f"{pct:.1f}% alive", x, y + 83, 13, MUTED)
+            self.text(f"{alive} living cells", x, y + 100, 13, MUTED, 128)
+        self.text(self.summary["headline"], sx + 12, y + 124, 16, TEXT, 262)
+        self.text(self.summary["trend"] if self.summary["span"] else "Open-ended / no final winner", sx + 12, y + 146, 11, MUTED, 262)
+        total, bar_width = self.arena.size ** 2, 262
+        self.score_bars = []
+        if hard:
+            bar = pg.Rect(sx + 12, y + 170, bar_width, 7)
+            self.score_bars.append(bar)
+            pg.draw.rect(self.window, (15, 19, 21), bar)
+            lw, rw = round(bar_width * left / total), round(bar_width * right / total)
+            if lw:
+                pg.draw.rect(self.window, GREEN, (bar.x, bar.y, lw, bar.height))
+            if rw:
+                pg.draw.rect(self.window, CORAL, (bar.right - rw, bar.y, rw, bar.height))
+        else:
+            for i, value, color in ((0, left, GREEN), (1, right, CORAL)):
+                bar = pg.Rect(sx + 12, y + 167 + i * 9, bar_width, 4)
+                self.score_bars.append(bar)
+                pg.draw.rect(self.window, (15, 19, 21), bar)
+                filled = round(bar_width * value / total)
+                if filled:
+                    pg.draw.rect(self.window, color, (bar.x, bar.y, filled, 4))
+
+    def draw_effects(self):
         pg, arena = self.pg, self.arena
+        scale = self.board.width / arena.size
+        overlay = pg.Surface(self.board.size, pg.SRCALPHA)
+        self.effects = [effect for effect in self.effects if self.elapsed - effect["born"] < 1.25]
+        for effect in self.effects:
+            age = self.elapsed - effect["born"]
+            progress = min(1.0, age / 1.25)
+            opacity = round(230 * (1 - progress))
+            center = ((effect["x"] + .5) * scale, (effect["y"] + .5) * scale)
+            base = max(5, effect["radius"] * scale)
+            growth = 0 if self.reduced_motion else progress * 16
+            color = (*effect["color"], opacity)
+            pg.draw.circle(overlay, color, center, round(base + growth), 2)
+            if effect["kind"] == "damage":
+                if not self.reduced_motion:
+                    for i in range(8):
+                        angle = i * math.tau / 8
+                        a = (center[0] + math.cos(angle) * (base + growth + 3),
+                             center[1] + math.sin(angle) * (base + growth + 3))
+                        b = (a[0] + math.cos(angle) * 6, a[1] + math.sin(angle) * 6)
+                        pg.draw.line(overlay, color, a, b, 2)
+            else:
+                pg.draw.line(overlay, color, (center[0] - 5, center[1]), (center[0] + 5, center[1]), 2)
+                pg.draw.line(overlay, color, (center[0], center[1] - 5), (center[0], center[1] + 5), 2)
+            label = self.fonts[12].render(effect["label"], True, effect["color"])
+            label.set_alpha(opacity)
+            tx = clamp(round(center[0] - label.get_width() / 2), 4, max(4, self.board.width - label.get_width() - 4))
+            ty = clamp(round(center[1] - base - 26 - growth), 4, self.board.height - 24)
+            pg.draw.rect(overlay, (12, 19, 23, round(220 * (1 - progress))), (tx - 3, ty - 2, label.get_width() + 6, 21), border_radius=4)
+            overlay.blit(label, (tx, ty))
+        self.window.blit(overlay, self.board)
+
+    def draw(self, dt=None):
+        pg, arena = self.pg, self.arena
+        now = time.perf_counter()
+        dt = min(.25, max(0.0, now - self.last_draw if dt is None else dt))
+        self.last_draw = now
+        self.elapsed += dt
+        self.refresh()
         w, h = self.window.get_size()
         self.window.fill(BG)
         self.buttons = []
-        sidebar = 270
-        bx, by = 22, 132
-        size = max(1, min(w - sidebar - 64, h - by - 74))
+        sidebar, by, gap = 286, 110, 16
+        size = max(1, min(w - sidebar - 56, h - by - 52))
+        bx = max(20, (w - size - gap - sidebar) // 2)
+        sx = bx + size + gap
+        self.rail_x = sx
         self.board = pg.Rect(bx, by, size, size)
-        sx = w - sidebar - 22
-        self.text("PETRI / CLASH", 22, 18, 28)
-        self.text("LIVING NEURAL ARENA", 24, 57, 11, GREEN)
-        self.text(f"{arena.args.device.upper()}  /  {torch.get_num_threads()} THREADS", sx, 25, 12, MUTED)
-        self.text(f"SEED {arena.args.seed}  /  STEP {arena.steps:05d}", sx, 48, 12)
-        self.button((22, 88, 85, 30), "RESUME" if self.paused else "PAUSE", "pause", self.paused)
-        self.button((115, 88, 76, 30), "RESET", "reset")
-        self.button((199, 88, 68, 30), "STEP", "step")
-        self.button((275, 88, 68, 30), f"{self.speed}x", "speed")
-        self.button((351, 88, 112, 30), "HARD" if arena.mode == "hard" else "SOFT", "mode", True)
-        self.button((471, 88, 90, 30), "COLORS", "colors", self.team_colors)
-        pg.draw.rect(self.window, BORDER, self.board.inflate(2, 2), border_radius=3)
+        self.text("PETRI CLASH", bx, 13, 28)
+        self.text("NEURAL GROWTH SANDBOX", bx + 1, 49, 11, MUTED)
+        self.text(f"SEED {arena.args.seed:03d}", sx + 12, 23, 12, AMBER)
+        self.text(f"TICK {arena.steps:05d} / {self.current_fps:.0f} FPS", sx + 12, 47, 11, MUTED)
+        x = bx
+        for width, label, action, active in (
+            (74, "RESUME" if self.paused else "PAUSE", "pause", self.paused),
+            (68, "REPLAY", "reset", False), (48, "STEP", "step", False),
+            (42, f"{self.speed}x", "speed", False),
+            (66, "HARD" if arena.mode == "hard" else "SOFT", "mode", True),
+            (72, "COLORS", "colors", self.team_colors),
+            (60, "FX OFF" if self.reduced_motion else "FX ON", "motion", not self.reduced_motion)):
+            self.button((x, 73, width, 27), label, action, active)
+            x += width + 6
+        # The board is the dominant element; the rail always sits 16px beside it.
+        pg.draw.rect(self.window, BORDER, self.board.inflate(2, 2), 1)
         array = arena.rgb(self.team_colors, self.view)
+        key = (arena.mode, self.view, self.team_colors, arena.size)
+        array = self.blend.reset(array, key=key) if self.reduced_motion else self.blend.update(array, dt, key=key)
         surface = pg.surfarray.make_surface(array.swapaxes(0, 1))
         self.window.blit(pg.transform.scale(surface, self.board.size), self.board)
+        self.draw_effects()
+        for corner_x, corner_y, dx, dy in ((self.board.left - 2, self.board.top - 2, 1, 1),
+                (self.board.right + 1, self.board.top - 2, -1, 1),
+                (self.board.left - 2, self.board.bottom + 1, 1, -1),
+                (self.board.right + 1, self.board.bottom + 1, -1, -1)):
+            pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x + dx * 7, corner_y), 1)
+            pg.draw.line(self.window, MUTED, (corner_x, corner_y), (corner_x, corner_y + dy * 7), 1)
         mouse = pg.mouse.get_pos()
         if self.board.collidepoint(mouse):
-            radius = max(3, round(self.radius * self.board.width / arena.size))
-            pg.draw.circle(self.window, (215, 229, 212), mouse, radius, 1)
-        if self.paused:
-            badge = pg.Rect(self.board.x + 12, self.board.y + 12, 151, 27)
-            pg.draw.rect(self.window, PANEL, badge, border_radius=6)
-            self.text("PAUSED / N TO STEP", badge.x + 9, badge.y + 6, 11, GREEN)
+            planting = bool(pg.key.get_mods() & pg.KMOD_SHIFT)
+            radius = max(3, round((1 if planting else self.radius) * self.board.width / arena.size))
+            pg.draw.circle(self.window, GREEN if planting else AMBER, mouse, radius, 1)
+        # Inset labels identify the field without a rounded dashboard badge.
+        label = "PAUSED / N TO STEP" if self.paused else f"{self.view.upper()} / {arena.mode.upper()}"
+        self.text(label, self.board.x + 12, self.board.y + 11, 11, AMBER if self.paused else MUTED)
+        size_label = f"{arena.size} x {arena.size}"
+        self.text(size_label, self.board.right - self.fonts[11].size(size_label)[0] - 12,
+                  self.board.y + 11, 11, MUTED)
+        # One continuous instrument rail, separated by rules rather than cards.
+        pg.draw.rect(self.window, PANEL, (sx, 100, sidebar, min(640, h - 120)))
+        pg.draw.line(self.window, (81, 89, 90), (sx, 100), (sx + sidebar, 100))
+        self.draw_score(w)
+        self.draw_sidebar(sx, 308, sidebar)
+        self.draw_underboard()
+        pg.display.flip()
+
+    def draw_underboard(self):
+        x, y, width = self.board.x, self.board.bottom + 10, self.board.width
+        if self.notices:
+            text, color, _ = self.notices[-1]
+            self.text(text, x, y, 12, color, width)
+        else:
+            no_life = not self.stats_cache["left_alive"] and not self.stats_cache["right_alive"]
+            status = self.summary["status"] if no_life or not self.stats_cache["finite"] else self.message
+            self.text(status, x, y, 12, TEXT, width)
         st = self.stats_cache
-        total = max(1, st["left_alive"] + st["right_alive"])
-        bar = pg.Rect(bx, self.board.bottom + 13, size, 5)
-        pg.draw.rect(self.window, CORAL, bar)
-        pg.draw.rect(self.window, GREEN, (bar.x, bar.y, round(size * st["left_alive"] / total), 5))
-        self.text(f"{st['left_alive']} living cells", bx, bar.bottom + 7, 12, GREEN)
-        label = f"{st['right_alive']} living cells"
-        self.text(label, self.board.right - self.fonts[12].size(label)[0], bar.bottom + 7, 12, CORAL)
-        self.text(f"{self.current_fps:.0f} FPS  /  {self.view.upper()}", bx, h - 24, 11, MUTED)
-        self.text(self.message[:76], bx + 165, h - 24, 11, TEXT)
-        y = 90
-        for side, bundle in enumerate((arena.left, arena.right)):
-            color = GREEN if side == 0 else CORAL
-            pg.draw.rect(self.window, PANEL, (sx, y, sidebar, 98), border_radius=10)
-            self.text("LEFT CULTURE" if side == 0 else "RIGHT CULTURE", sx + 14, y + 10, 11, color)
-            self.text(bundle["name"].split("_", 1)[-1].upper(), sx + 14, y + 30, 22)
-            territory = st["left_territory" if side == 0 else "right_territory"]
-            details = f"{bundle['seed_dir']}  /  {bundle.get('health', 'unverified')}"
-            self.text(details, sx + 14, y + 60, 11, MUTED)
-            if territory is not None:
-                self.text(f"{territory} owned cells", sx + 14, y + 77, 11, color)
-            y += 108
-        self.text("CHOOSE A CULTURE", sx, y + 3, 12, MUTED)
-        y += 27
-        self.button((sx, y, 130, 29), "FOR LEFT", "left", self.side == 0, GREEN)
-        self.button((sx + 140, y, 130, 29), "FOR RIGHT", "right", self.side == 1, CORAL)
-        y += 39
+        neutral = self.arena.size ** 2 - (st["left_territory"] or 0) - (st["right_territory"] or 0)
+        text = f"{neutral:,} neutral / {st['contested']} overlapping / {self.arena.args.device.upper()}" if self.arena.mode == "hard" else f"{st['contested']} overlapping / independent growth / {self.arena.args.device.upper()}"
+        self.text(text, x, y + 22, 11, MUTED, width)
+
+    def draw_sidebar(self, sx, y, sidebar):
+        pg, arena = self.pg, self.arena
+        pg.draw.line(self.window, BORDER, (sx + 12, y - 9), (sx + sidebar - 12, y - 9))
+        self.text("CULTURES", sx + 12, y, 12, AMBER)
+        self.text("SELECT FOR", sx + 12, y + 27, 11, MUTED)
+        self.button((sx + 99, y + 22, 76, 25), "LEFT", "left", self.side == 0, GREEN)
+        self.button((sx + 181, y + 22, 93, 25), "RIGHT", "right", self.side == 1, CORAL)
+        y += 58
         for i, (target, status) in enumerate(zip(arena.targets, self.status)):
             row, col = divmod(i, 3)
-            r = pg.Rect(sx + col * 92, y + row * 74, 86, 68)
+            r = pg.Rect(sx + 10 + col * 90, y + row * 62, 86, 57)
             ready = status["status"] == "ready"
             active = i == (arena.left_index if self.side == 0 else arena.right_index)
             hover = r.collidepoint(pg.mouse.get_pos())
-            fill = (36, 59, 54) if active else ((32, 47, 51) if hover else PANEL)
-            pg.draw.rect(self.window, fill, r, border_radius=7)
-            pg.draw.rect(self.window, GREEN if active else BORDER, r, 1, border_radius=7)
-            thumb = pg.transform.smoothscale(self.thumbs[i], (30, 30))
+            fill = (53, 63, 61) if active else ((48, 57, 60) if hover else (27, 33, 35))
+            pg.draw.rect(self.window, fill, r)
+            if active:
+                pg.draw.rect(self.window, GREEN if self.side == 0 else CORAL, r, 1)
+            thumb = pg.transform.smoothscale(self.thumbs[i], (28, 28))
             if not ready:
-                thumb.set_alpha(65)
-            self.window.blit(thumb, (r.x + 28, r.y + 4))
-            name = f"{i + 1} {target.stem.split('_', 1)[-1]}"
-            self.text(name, r.x + 5, r.y + 35, 11, TEXT if ready else MUTED)
-            self.text("ready" if ready else status["status"], r.x + 5, r.y + 51, 11, GREEN if ready else MUTED)
+                thumb.set_alpha(60)
+            self.window.blit(thumb, (r.x + 29, r.y + 2))
+            self.text(str(i + 1), r.x + 5, r.y + 3, 11, MUTED)
+            name = target.stem.split('_', 1)[-1]
+            label = name if ready else name + " *"
+            name_surface = self.fonts[13].render(label, True, TEXT if ready else MUTED)
+            self.window.blit(name_surface, name_surface.get_rect(center=(r.centerx, r.y + 42)))
             self.buttons.append((r, ("target", i)))
-        y += 232
-        self.button((sx, y, 86, 28), "LIFE", ("view", "organisms"), self.view == "organisms")
-        self.button((sx + 92, y, 86, 28), "LAND", ("view", "territory"), self.view == "territory")
-        self.button((sx + 184, y, 86, 28), "PRESSURE", ("view", "pressure"), self.view == "pressure")
-        self.text(f"CRATER RADIUS {self.radius}   [ / ]", sx, y + 42, 11, MUTED)
-        self.text("Click: damage / Shift-click: left seed", sx, y + 62, 11, MUTED)
-        self.text("Right-click: right seed / C: clear", sx, y + 79, 11, MUTED)
-        self.text("Space: pause / N: step / R: replay", sx, y + 96, 11, MUTED)
-        pg.display.flip()
+        y += 188
+        self.text("* failed weights / unavailable", sx + 12, y, 11, MUTED)
+        y += 26
+        for dx, label, view in ((0, "LIFE", "organisms"), (90, "LAND", "territory"), (180, "PRESSURE", "pressure")):
+            self.button((sx + 10 + dx, y, 86, 27), label, ("view", view), self.view == view)
+        y += 42
+        rules = (["Held land sets the lead. Pressure", "claims it; dead land turns neutral."] if arena.mode == "hard" else
+                 ["Living cells set the comparison.", "Independent growth; no land capture."])
+        for i, text in enumerate(rules):
+            self.text(text, sx + 12, y + i * 18, 13, MUTED, 262)
+        self.text(f"Click: damage [{self.radius}]  /  [ ]: size", sx + 12, y + 46, 13, TEXT, 262)
+        self.text("Shift-click: L seed / Right: R seed", sx + 12, y + 63, 13, TEXT, 262)
+        self.text("Space: pause / N: step / C: clear", sx + 12, y + 80, 13, TEXT, 262)
 
     def action(self, action):
         arena = self.arena
+        reset = False
         if isinstance(action, tuple):
             if action[0] == "view":
                 if arena.mode == "soft" and action[1] != "organisms":
-                    self.message = "Land and pressure views are available in hard mode."
+                    self.notice("Land and pressure views are available in hard mode.")
                 else:
                     self.view = action[1]
+                    self.notice({"organisms": "LIFE: living tissue. Turn COLORS on to identify each side.",
+                                 "territory": "LAND: green is left, coral is right, dark is neutral.",
+                                 "pressure": "PRESSURE: green favors left; coral favors right. Brightness shows strength."}[self.view])
             else:
                 try:
                     arena.select(action[1], self.side)
-                    self.message = "Culture loaded. Match reset to the same seed."
+                    self.refresh(reset=True)
+                    self.notice("Culture loaded. Replaying the same seed.")
                 except (ValueError, RuntimeError, OSError) as exc:
                     status = self.status[action[1]]["status"]
                     if status != "ready":
                         name = arena.targets[action[1]].stem.split("_", 1)[-1].title()
-                        self.message = f"{name}: {status} checkpoint. Choose a ready culture."
+                        self.notice(f"{name}: {status} checkpoint. Choose a ready culture.")
                     else:
-                        self.message = str(exc)
-            self.stats_cache = arena.stats()
+                        self.notice(str(exc))
+            self.refresh()
             return
         if action == "pause":
             self.paused = not self.paused
+            self.notice("Paused. Editing still works; N advances one tick." if self.paused else "Simulation resumed.")
         elif action == "reset":
             arena.reset()
+            reset = True
             self.message = "Replaying the same seed."
         elif action == "step":
             self.paused = True
             arena.step()
+            self.notice("Advanced exactly one simulation tick.")
         elif action == "speed":
             self.speed = 1 if self.speed == 8 else self.speed * 2
         elif action == "mode":
             arena.mode = "soft" if arena.mode == "hard" else "hard"
             arena.reset()
-            self.view = "organisms"
-            self.message = f"{arena.mode.title()} rules. Match reset."
+            self.view, reset = "organisms", True
+            self.message = f"{arena.mode.title()} rules. Replaying the same seed."
+        elif action == "clear":
+            arena.clear()
+            reset = True
+            self.message = "Arena cleared. Shift-click or right-click to plant new life."
         elif action == "colors":
             self.team_colors = not self.team_colors
+        elif action == "motion":
+            self.reduced_motion = not self.reduced_motion
         elif action in ("left", "right"):
             self.side = 0 if action == "left" else 1
-        self.stats_cache = arena.stats()
+        self.refresh(reset=reset)
 
     def event(self, event):
         pg, arena = self.pg, self.arena
@@ -364,13 +545,12 @@ class ArenaUI:
             return False
         if event.type == pg.VIDEORESIZE:
             self.window = pg.display.set_mode((max(860, event.w), max(740, event.h)), pg.RESIZABLE)
+            self.draw(dt=0)  # Subsequent clicks in this event batch use current geometry.
         if event.type == pg.KEYDOWN:
-            mapping = {pg.K_SPACE: "pause", pg.K_r: "reset", pg.K_n: "step",
-                       pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed"}
+            mapping = {pg.K_SPACE: "pause", pg.K_r: "reset", pg.K_n: "step", pg.K_c: "clear",
+                       pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed", pg.K_f: "motion"}
             if event.key in mapping:
                 self.action(mapping[event.key])
-            elif event.key == pg.K_c:
-                arena.clear()
             elif event.key in (pg.K_LEFTBRACKET, pg.K_RIGHTBRACKET):
                 self.radius = clamp(self.radius + (1 if event.key == pg.K_RIGHTBRACKET else -1), 1, arena.size)
             elif pg.K_1 <= event.key <= pg.K_9:
@@ -383,11 +563,11 @@ class ArenaUI:
                 x = clamp(int((event.pos[0] - self.board.x) * arena.size / self.board.width), 0, arena.size - 1)
                 y = clamp(int((event.pos[1] - self.board.y) * arena.size / self.board.height), 0, arena.size - 1)
                 if event.button == 3:
-                    arena.plant(x, y, 1)
+                    self.interact(x, y, 1)
                 elif event.button == 1 and pg.key.get_mods() & pg.KMOD_SHIFT:
-                    arena.plant(x, y, 0)
+                    self.interact(x, y, 0)
                 elif event.button == 1:
-                    arena.damage(x, y, self.radius)
+                    self.interact(x, y)
             elif event.button == 1:
                 for rect, action in self.buttons:
                     if rect.collidepoint(event.pos):
@@ -398,7 +578,7 @@ class ArenaUI:
     def run(self):
         frames, running = 0, True
         try:
-            self.draw()  # Valid hit regions before the first input event.
+            self.draw()
             while running:
                 for event in self.pg.event.get():
                     if not self.event(event):
@@ -408,7 +588,6 @@ class ArenaUI:
                     break
                 if not self.paused:
                     self.arena.step(self.speed)
-                self.stats_cache = self.arena.stats()
                 self.current_fps = self.clock.get_fps()
                 self.draw()
                 frames += 1

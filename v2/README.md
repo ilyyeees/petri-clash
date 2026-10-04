@@ -2,7 +2,7 @@
 
 Two independently trained neural cellular automata grow, collide, and regenerate. Watch the learned organisms, paint damage into the world, or inspect the territory and pressure underneath.
 
-![Living arena](verification/arena.png)
+![Living arena feedback](verification/arena-feedback.png)
 
 ## Play on CPU, without retraining
 
@@ -28,6 +28,18 @@ python v2/soft_clash.py --device cpu              # free growth, no territory ex
 
 There is no hidden bootstrap training or silent untrained fallback. Researchers can explicitly inspect failed or unverified weights using `--allow-unhealthy`, or request training with `--bootstrap-steps N`. An explicitly selected checkpoint seed must exist and pass the health filter unless overridden.
 
+## Interface direction
+
+The field takes priority: a larger square board sits beside a compact instrument rail, with a fixed 16px gap, squared controls, warm amber actions, and mint/rose team information. Bold headings and tabular scores establish a clear hierarchy; explanatory text stays normal-weight. The composition was informed by the [Into the Breach publisher screenshots](https://store.steampowered.com/app/590380/Into_the_Breach/) and the designer's [GDC postmortem on readability and single-screen play](https://media.gdcvault.com/gdc2019/presentations/Into%20the%20Breach%20Postmortem%20Final.pdf). The drawing code is original Pygame and uses the repository's own target images, with system-font fallbacks.
+
+## Read the battle at a glance
+
+The live scoreboard counts **held cells in hard mode** and **living cells in soft mode**. Large exact counters, a lead margin, full-board percentages, and recent net changes make the comparison explicit. Hard-mode grey in the bar is neutral land; the two soft-mode bars independently show each culture’s fraction of the board (which may overlap). A lead is not a declared winner: this is an open-ended arena, not a timed match.
+
+Short, time-based visual easing smooths the board without changing cell ownership, model state, the RNG, or simulation ticks. Land and pressure share the left-green/right-coral palette. Changing views, replaying, or editing snaps to the correct new board instead of blending unrelated states.
+
+Damage creates a crater pulse and reports the exact number of living cells erased on each side. Planting creates a side-colored seed marker, and the action result remains below the board. Effects use wall time and finish even while paused; scores update immediately. Use **F / FX ON-OFF** or `--reduced-motion` to disable easing and moving effects. Recent score deltas are observed net changes, not guessed kill/capture attribution, and cover the displayed number of simulation ticks.
+
 ## The upgraded rules
 
 Hard mode now lets neutral frontier cells retain their hidden developmental state while ownership accumulates. This fixes organisms that grew in training but immediately stalled or died under the previous ownership mask. Opponent-owned cells still suppress enemy hidden tissue; simultaneous proposals and sign-aware hysteresis keep captures symmetric. Abandoned land loses ownership, and nonfinite cells are quarantined.
@@ -44,6 +56,7 @@ Soft mode keeps both organisms independent. Switch modes with **M** or the mode 
 | Cycle 1× / 2× / 4× / 8× speed | Tab or speed button |
 | Toggle hard / soft rules and reset | M or mode button |
 | Team colors | T or COLORS |
+| Reduce motion | F or FX ON-OFF |
 | Life / land / pressure view | Sidebar buttons |
 | Select a culture | Click FOR LEFT / FOR RIGHT, then a tile |
 | Select left / right with keyboard | 1–9 / Shift+1–9 |
@@ -92,6 +105,8 @@ Training is optional and may be slow on CPU. The [trainer guide](trainer/README.
 
 Checkpoint loading uses PyTorch's restricted `weights_only` loader, with a narrow compatibility allowlist for historical NumPy RNG state. Only load checkpoints you trust. GPU execution and large training sweeps were not performed for this upgrade.
 
+See the [feedback verification report](verification/feedback.md) for UI coverage, reproducible screenshots and measured presentation overhead.
+
 ## Tests
 
 From the repository root:
@@ -102,4 +117,4 @@ PETRI_TEST_CHECKPOINTS=1 python -m pytest v2/tests -q
 python -m compileall -q v2
 ```
 
-The environment flag enables actual shipped-model growth checks; otherwise that slower check is skipped. CI runs the same CPU suite, plus headless and benchmark smoke runs. The workflow is included locally and has not run on GitHub until these changes are published.
+The environment flag enables actual shipped-model growth checks; otherwise that slower check is skipped. CI runs the same CPU suite, plus headless and benchmark smoke runs. The workflow runs on both pull requests and pushes; see the pull request for the exact revision’s CI status.
