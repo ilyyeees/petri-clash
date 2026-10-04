@@ -1,0 +1,54 @@
+{
+  "schema": "petri-clash-duel-recipe",
+  "schema_version": 1,
+  "ruleset_version": 1,
+  "models": {
+    "left": {
+      "target": "01_heart",
+      "checkpoint_seed": 0
+    },
+    "right": {
+      "target": "06_flower",
+      "checkpoint_seed": 2
+    }
+  },
+  "configuration": {
+    "mode": "hard",
+    "simulation_seed": 7,
+    "grid_size": 48,
+    "starting_positions": {
+      "left": [
+        16,
+        23
+      ],
+      "right": [
+        31,
+        23
+      ]
+    },
+    "placement": "mirrored",
+    "round_ticks": 600,
+    "warmup_ticks": 60,
+    "rules": {
+      "pressure_gain": 0.28,
+      "control_decay": 0.97,
+      "capture_threshold": 0.55,
+      "release_threshold": 0.12,
+      "tie_margin": 0.01
+    }
+  },
+  "runtime": {
+    "device": "cpu",
+    "cpu_threads": 1,
+    "deterministic_algorithms": true,
+    "python_version": "3.12.14",
+    "torch_version": "2.14.1+cpu",
+    "numpy_version": "2.3.5",
+    "platform": "Linux",
+    "machine": "x86_64"
+  },
+  "expected_score": {
+    "left_cell_ticks": 123178,
+    "right_cell_ticks": 121494
+  }
+}

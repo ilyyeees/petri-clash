@@ -1,0 +1,1765 @@
+{
+  "schema": "petri-clash-ready-matchup-check",
+  "schema_version": 1,
+  "checked_date": "2026-10-04",
+  "configuration": {
+    "mode": "hard",
+    "seeds": [
+      0,
+      7,
+      42
+    ],
+    "round_ticks": 600,
+    "warmup_ticks": 60,
+    "requested_grid_size": 48,
+    "grid_size": 48,
+    "placement": "mirrored",
+    "starting_positions": {
+      "left": [
+        16,
+        23
+      ],
+      "right": [
+        31,
+        23
+      ]
+    },
+    "rules": {
+      "pressure_gain": 0.28,
+      "control_decay": 0.97,
+      "capture_threshold": 0.55,
+      "release_threshold": 0.12,
+      "tie_margin": 0.01
+    },
+    "score_unit": "cell-ticks",
+    "metric": "held cells"
+  },
+  "runtime": {
+    "device": "cpu",
+    "seed": null,
+    "cpu_threads": 1,
+    "interop_threads": 9,
+    "logical_cpu_count": 9,
+    "deterministic_algorithms": true,
+    "python_version": "3.12.14",
+    "torch_version": "2.14.1+cpu",
+    "numpy_version": "2.3.5",
+    "platform": "Linux",
+    "machine": "x86_64"
+  },
+  "matchups": 10,
+  "paired_seeds_per_matchup": 3,
+  "rounds": 60,
+  "all_rounds_complete_and_finite": true,
+  "all_endpoints_have_living_cells_on_both_sides": true,
+  "score_gap_definition": "abs(A-B)/(A+B), using the six-round culture totals; not a win probability",
+  "limits": [
+    "Three seeds under default hard-mode settings are not a calibrated ranking or a significance test.",
+    "Both side assignments were sampled; this does not prove fair or balanced dynamics.",
+    "Living-cell counts are final endpoints, not a claim about every intermediate tick.",
+    "Ready means saved evaluation metadata was accepted; it is not a guarantee of equal culture strength.",
+    "CPU only. No training, model-weight changes or rule changes."
+  ],
+  "pairs": [
+    {
+      "models": {
+        "A": {
+          "target_index": 1,
+          "name": "01_heart",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        },
+        "B": {
+          "target_index": 2,
+          "name": "02_star",
+          "requested_seed": null,
+          "seed_dir": "seed_001"
+        }
+      },
+      "scores": {
+        "A": 774705,
+        "B": 553535
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.16651358188279228,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 258508,
+            "B": 184279
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 258111,
+            "B": 184523
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 258086,
+            "B": 184733
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 129056,
+            "B": 91028
+          },
+          "living_cells": {
+            "A": 235,
+            "B": 164
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 93251,
+            "A": 129452
+          },
+          "living_cells": {
+            "B": 170,
+            "A": 234
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 129445,
+            "B": 91538
+          },
+          "living_cells": {
+            "A": 233,
+            "B": 166
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 92985,
+            "A": 128666
+          },
+          "living_cells": {
+            "B": 171,
+            "A": 233
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 129101,
+            "B": 91592
+          },
+          "living_cells": {
+            "A": 234,
+            "B": 165
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 93141,
+            "A": 128985
+          },
+          "living_cells": {
+            "B": 168,
+            "A": 234
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 1,
+          "name": "01_heart",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        },
+        "B": {
+          "target_index": 3,
+          "name": "03_sun",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        }
+      },
+      "scores": {
+        "A": 788848,
+        "B": 400589
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.32642250072933665,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 262899,
+            "B": 134030
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 262668,
+            "B": 134716
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 263281,
+            "B": 131843
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 132073,
+            "B": 70389
+          },
+          "living_cells": {
+            "A": 241,
+            "B": 124
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 63641,
+            "A": 130826
+          },
+          "living_cells": {
+            "B": 115,
+            "A": 234
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 132288,
+            "B": 70489
+          },
+          "living_cells": {
+            "A": 238,
+            "B": 124
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 64227,
+            "A": 130380
+          },
+          "living_cells": {
+            "B": 115,
+            "A": 235
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 132240,
+            "B": 70570
+          },
+          "living_cells": {
+            "A": 239,
+            "B": 124
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 61273,
+            "A": 131041
+          },
+          "living_cells": {
+            "B": 115,
+            "A": 235
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 1,
+          "name": "01_heart",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        },
+        "B": {
+          "target_index": 6,
+          "name": "06_flower",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        }
+      },
+      "scores": {
+        "A": 725456,
+        "B": 745601
+      },
+      "paired_outcome": "B",
+      "combined_score_gap_fraction": 0.013694234825706957,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 240320,
+            "B": 249956
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 242161,
+            "B": 247747
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "A",
+            "B"
+          ],
+          "winner_changes_after_swap": true
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 242975,
+            "B": 247898
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 121988,
+            "B": 122840
+          },
+          "living_cells": {
+            "A": 222,
+            "B": 220
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 127116,
+            "A": 118332
+          },
+          "living_cells": {
+            "B": 225,
+            "A": 213
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 123178,
+            "B": 121494
+          },
+          "living_cells": {
+            "A": 224,
+            "B": 217
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 126253,
+            "A": 118983
+          },
+          "living_cells": {
+            "B": 225,
+            "A": 215
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 121501,
+            "B": 123382
+          },
+          "living_cells": {
+            "A": 223,
+            "B": 219
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 124516,
+            "A": 121474
+          },
+          "living_cells": {
+            "B": 221,
+            "A": 222
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 1,
+          "name": "01_heart",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        },
+        "B": {
+          "target_index": 7,
+          "name": "07_umbrella",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        }
+      },
+      "scores": {
+        "A": 742343,
+        "B": 489691
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.20506901595248184,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 247391,
+            "B": 163674
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 246597,
+            "B": 163861
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 248355,
+            "B": 162156
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 125734,
+            "B": 79882
+          },
+          "living_cells": {
+            "A": 231,
+            "B": 145
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 83792,
+            "A": 121657
+          },
+          "living_cells": {
+            "B": 152,
+            "A": 222
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 125573,
+            "B": 80168
+          },
+          "living_cells": {
+            "A": 232,
+            "B": 146
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 83693,
+            "A": 121024
+          },
+          "living_cells": {
+            "B": 152,
+            "A": 222
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 125220,
+            "B": 79758
+          },
+          "living_cells": {
+            "A": 232,
+            "B": 146
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 82398,
+            "A": 123135
+          },
+          "living_cells": {
+            "B": 152,
+            "A": 226
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 2,
+          "name": "02_star",
+          "requested_seed": null,
+          "seed_dir": "seed_001"
+        },
+        "B": {
+          "target_index": 3,
+          "name": "03_sun",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        }
+      },
+      "scores": {
+        "A": 600609,
+        "B": 409354
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.18936832339402532,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 199990,
+            "B": 138706
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 200350,
+            "B": 138175
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 200269,
+            "B": 132473
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 100804,
+            "B": 71895
+          },
+          "living_cells": {
+            "A": 183,
+            "B": 126
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 66811,
+            "A": 99186
+          },
+          "living_cells": {
+            "B": 118,
+            "A": 181
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 100817,
+            "B": 71185
+          },
+          "living_cells": {
+            "A": 183,
+            "B": 124
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 66990,
+            "A": 99533
+          },
+          "living_cells": {
+            "B": 118,
+            "A": 180
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 100806,
+            "B": 71173
+          },
+          "living_cells": {
+            "A": 183,
+            "B": 124
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 61300,
+            "A": 99463
+          },
+          "living_cells": {
+            "B": 108,
+            "A": 182
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 2,
+          "name": "02_star",
+          "requested_seed": null,
+          "seed_dir": "seed_001"
+        },
+        "B": {
+          "target_index": 6,
+          "name": "06_flower",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        }
+      },
+      "scores": {
+        "A": 556848,
+        "B": 799035
+      },
+      "paired_outcome": "B",
+      "combined_score_gap_fraction": 0.17861939415126526,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 186456,
+            "B": 266139
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 185050,
+            "B": 266061
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 185342,
+            "B": 266835
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 94300,
+            "B": 131745
+          },
+          "living_cells": {
+            "A": 172,
+            "B": 237
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 134394,
+            "A": 92156
+          },
+          "living_cells": {
+            "B": 235,
+            "A": 165
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 94054,
+            "B": 131452
+          },
+          "living_cells": {
+            "A": 172,
+            "B": 237
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 134609,
+            "A": 90996
+          },
+          "living_cells": {
+            "B": 237,
+            "A": 165
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 94167,
+            "B": 131282
+          },
+          "living_cells": {
+            "A": 171,
+            "B": 237
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 135553,
+            "A": 91175
+          },
+          "living_cells": {
+            "B": 237,
+            "A": 166
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 2,
+          "name": "02_star",
+          "requested_seed": null,
+          "seed_dir": "seed_001"
+        },
+        "B": {
+          "target_index": 7,
+          "name": "07_umbrella",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        }
+      },
+      "scores": {
+        "A": 576571,
+        "B": 538863
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.03380567563836139,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 192459,
+            "B": 179473
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 192041,
+            "B": 179465
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 192071,
+            "B": 179925
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 96587,
+            "B": 89652
+          },
+          "living_cells": {
+            "A": 175,
+            "B": 162
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 89821,
+            "A": 95872
+          },
+          "living_cells": {
+            "B": 161,
+            "A": 174
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 96271,
+            "B": 89483
+          },
+          "living_cells": {
+            "A": 176,
+            "B": 162
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 89982,
+            "A": 95770
+          },
+          "living_cells": {
+            "B": 161,
+            "A": 174
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 96438,
+            "B": 89586
+          },
+          "living_cells": {
+            "A": 176,
+            "B": 162
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 90339,
+            "A": 95633
+          },
+          "living_cells": {
+            "B": 162,
+            "A": 173
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 3,
+          "name": "03_sun",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        },
+        "B": {
+          "target_index": 6,
+          "name": "06_flower",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        }
+      },
+      "scores": {
+        "A": 400740,
+        "B": 820748
+      },
+      "paired_outcome": "B",
+      "combined_score_gap_fraction": 0.3438494688445568,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 133708,
+            "B": 273992
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 133909,
+            "B": 273150
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 133123,
+            "B": 273606
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 64411,
+            "B": 135469
+          },
+          "living_cells": {
+            "A": 113,
+            "B": 242
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 138523,
+            "A": 69297
+          },
+          "living_cells": {
+            "B": 245,
+            "A": 121
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 64806,
+            "B": 135022
+          },
+          "living_cells": {
+            "A": 113,
+            "B": 242
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 138128,
+            "A": 69103
+          },
+          "living_cells": {
+            "B": 245,
+            "A": 121
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 63396,
+            "B": 135251
+          },
+          "living_cells": {
+            "A": 113,
+            "B": 242
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 138355,
+            "A": 69727
+          },
+          "living_cells": {
+            "B": 243,
+            "A": 122
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 3,
+          "name": "03_sun",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        },
+        "B": {
+          "target_index": 7,
+          "name": "07_umbrella",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        }
+      },
+      "scores": {
+        "A": 409909,
+        "B": 552954
+      },
+      "paired_outcome": "B",
+      "combined_score_gap_fraction": 0.14856215266346304,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 137860,
+            "B": 184658
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 138518,
+            "B": 184091
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 133531,
+            "B": 184205
+          },
+          "paired_outcome": "B",
+          "leg_winners": [
+            "B",
+            "B"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 66795,
+            "B": 91719
+          },
+          "living_cells": {
+            "A": 121,
+            "B": 163
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 92939,
+            "A": 71065
+          },
+          "living_cells": {
+            "B": 166,
+            "A": 124
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 67637,
+            "B": 91091
+          },
+          "living_cells": {
+            "A": 123,
+            "B": 163
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 93000,
+            "A": 70881
+          },
+          "living_cells": {
+            "B": 166,
+            "A": 124
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 63251,
+            "B": 91493
+          },
+          "living_cells": {
+            "A": 112,
+            "B": 166
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 92712,
+            "A": 70280
+          },
+          "living_cells": {
+            "B": 166,
+            "A": 124
+          }
+        }
+      ]
+    },
+    {
+      "models": {
+        "A": {
+          "target_index": 6,
+          "name": "06_flower",
+          "requested_seed": null,
+          "seed_dir": "seed_002"
+        },
+        "B": {
+          "target_index": 7,
+          "name": "07_umbrella",
+          "requested_seed": null,
+          "seed_dir": "seed_000"
+        }
+      },
+      "scores": {
+        "A": 795813,
+        "B": 508751
+      },
+      "paired_outcome": "A",
+      "combined_score_gap_fraction": 0.2200443979751089,
+      "per_seed": [
+        {
+          "seed": 0,
+          "status": "complete",
+          "leg_indices": [
+            0,
+            1
+          ],
+          "scores": {
+            "A": 265789,
+            "B": 168941
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 7,
+          "status": "complete",
+          "leg_indices": [
+            2,
+            3
+          ],
+          "scores": {
+            "A": 264465,
+            "B": 170429
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        },
+        {
+          "seed": 42,
+          "status": "complete",
+          "leg_indices": [
+            4,
+            5
+          ],
+          "scores": {
+            "A": 265559,
+            "B": 169381
+          },
+          "paired_outcome": "A",
+          "leg_winners": [
+            "A",
+            "A"
+          ],
+          "winner_changes_after_swap": false
+        }
+      ],
+      "endpoints": [
+        {
+          "seed": 0,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 136070,
+            "B": 82521
+          },
+          "living_cells": {
+            "A": 242,
+            "B": 148
+          }
+        },
+        {
+          "seed": 0,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 86420,
+            "A": 129719
+          },
+          "living_cells": {
+            "B": 155,
+            "A": 230
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 135070,
+            "B": 82888
+          },
+          "living_cells": {
+            "A": 240,
+            "B": 150
+          }
+        },
+        {
+          "seed": 7,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 87541,
+            "A": 129395
+          },
+          "living_cells": {
+            "B": 157,
+            "A": 228
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "A",
+            "right": "B"
+          },
+          "scores": {
+            "A": 136551,
+            "B": 83006
+          },
+          "living_cells": {
+            "A": 241,
+            "B": 150
+          }
+        },
+        {
+          "seed": 42,
+          "sides": {
+            "left": "B",
+            "right": "A"
+          },
+          "scores": {
+            "B": 86375,
+            "A": 129008
+          },
+          "living_cells": {
+            "B": 155,
+            "A": 229
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -42,3 +42,18 @@ python v2/verification/benchmark_feedback_ui.py --output /tmp/feedback-performan
 ```
 
 The benchmark requires the fixed baseline commit in Git history. CPU execution was verified; GPU execution and real-monitor display latency were not measured.
+
+## Current overview
+
+The README now shows the same damage-feedback scene with the current cumulative
+controls: lesson/duel entry, separate simulation/checkpoint labels, loaded seeds,
+and mouse-only lab tools. The original capture above remains historical evidence.
+
+![Current lab overview](arena-overview.png)
+
+```bash
+python v2/verification/capture_feedback.py --output arena-overview.png
+```
+
+This capture uses the shipped heart/star models and dummy SDL. It is a rendered
+interface check, not a native-window interaction test.

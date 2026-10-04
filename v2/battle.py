@@ -56,11 +56,14 @@ def _near(mask):
     return F.max_pool2d(mask.to(torch.float32), 3, stride=1, padding=1) > 0
 
 
-def _finite_cells(state):
+def _finite_cells(state, strict=False):
     # An unstable model must not poison neighboring cells on the next update.
     # Preserve every finite hidden value; clipping hidden channels changes the
     # pretrained dynamics. A cell with any nonfinite channel is removed instead.
-    return torch.where(torch.isfinite(state).all(dim=1, keepdim=True), state, 0.0)
+    finite = torch.isfinite(state).all(dim=1, keepdim=True)
+    if strict and not bool(finite.all()):
+        raise FloatingPointError("Non-finite NCA state or proposal")
+    return torch.where(finite, state, 0.0)
 
 
 def momentum_owner(control, owner, capture_threshold, release_threshold):
@@ -91,6 +94,7 @@ def clash_step(
     capture_threshold=DEFAULT_CAPTURE_THRESHOLD,
     release_threshold=DEFAULT_RELEASE_THRESHOLD,
     tie_margin=DEFAULT_TIE_MARGIN,
+    strict_finite=False,
 ):
     """Advance one battle tick without mutating any input.
 
@@ -102,13 +106,18 @@ def clash_step(
     A claimant must be adjacent to its previous living state or territory. This
     permits growth ahead of slow ownership while excluding distant spontaneous
     claims. Dead tissue and its control are pruned after resolving ownership.
+    ``strict_finite`` is an opt-in duel guard: non-finite input/proposals raise
+    FloatingPointError before quarantine can conceal an invalid round. The
+    default sandbox still quarantines unstable cells without changing its rules.
     """
     validate_rules(pressure_gain, control_decay, capture_threshold, release_threshold, tie_margin)
     _check_shapes(state_a, state_b, owner, control)
     with torch.inference_mode():
+        if strict_finite and not bool(torch.isfinite(control).all()):
+            raise FloatingPointError("Non-finite battle control")
         owned_a, owned_b = owner == 1, owner == 2
-        clean_a = torch.where(owned_b, 0.0, _finite_cells(state_a))
-        clean_b = torch.where(owned_a, 0.0, _finite_cells(state_b))
+        clean_a = torch.where(owned_b, 0.0, _finite_cells(state_a, strict_finite))
+        clean_b = torch.where(owned_a, 0.0, _finite_cells(state_b, strict_finite))
         support_a = _near((clean_a[:, 3:4] > ALIVE_ALPHA) | owned_a)
         support_b = _near((clean_b[:, 3:4] > ALIVE_ALPHA) | owned_b)
 
@@ -116,8 +125,8 @@ def clash_step(
         proposed_b = model_b(clean_b, steps=1)
         if proposed_a.shape != state_a.shape or proposed_b.shape != state_b.shape:
             raise ValueError("each model must preserve its organism state's shape")
-        proposed_a = torch.where(support_a, _finite_cells(proposed_a), 0.0)
-        proposed_b = torch.where(support_b, _finite_cells(proposed_b), 0.0)
+        proposed_a = torch.where(support_a, _finite_cells(proposed_a, strict_finite), 0.0)
+        proposed_b = torch.where(support_b, _finite_cells(proposed_b, strict_finite), 0.0)
         alpha_a = proposed_a[:, 3:4].clamp(0.0, 1.0)
         alpha_b = proposed_b[:, 3:4].clamp(0.0, 1.0)
         strength_a = torch.where(alpha_a > CLAIM_ALPHA, alpha_a, 0.0)

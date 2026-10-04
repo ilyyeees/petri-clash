@@ -2,12 +2,13 @@ import argparse
 import json
 import random
 import math
+from collections.abc import Mapping
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
 import os
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-import pygame
 import torch
 
 from nca import NCA, make_seed, pick_device
@@ -42,6 +43,8 @@ def seed_score(seed_dir):
 
     try:
         blob = json.loads(summary_path.read_text())
+        if isinstance(blob["score"], bool):
+            return float("inf")
         score = float(blob["score"])
         return score if math.isfinite(score) else float("inf")
     except Exception:
@@ -60,8 +63,13 @@ def checkpoint_health(seed_dir):
     threshold = 0.2
     try:
         config = json.loads((seed_dir / "resolved_config.json").read_text())
-        threshold = float(config.get("stop", {}).get("collapsed_score", threshold))
-    except (OSError, ValueError, TypeError):
+        if isinstance(config, Mapping):
+            stop = config.get("stop", {})
+            if isinstance(stop, Mapping):
+                configured_threshold = stop.get("collapsed_score", threshold)
+                if not isinstance(configured_threshold, bool):
+                    threshold = float(configured_threshold)
+    except (OSError, ValueError, TypeError, OverflowError):
         pass
     if not math.isfinite(threshold) or threshold <= 0:
         threshold = 0.2
@@ -86,44 +94,122 @@ def discover_v2_checkpoint(target_path, preferred_seed=None, allow_unhealthy=Fal
     return candidates[0][2] if candidates else None
 
 
-def target_status(target_path):
-    checkpoint = discover_v2_checkpoint(target_path)
-    if checkpoint is not None:
-        return {"status": "ready", "score": seed_score(checkpoint.parents[1]),
-                "seed": seed_number(checkpoint.parents[1]), "checkpoint": str(checkpoint)}
-    unchecked = discover_v2_checkpoint(target_path, allow_unhealthy=True)
-    return {"status": checkpoint_health(unchecked.parents[1]) if unchecked else "missing",
-            "score": seed_score(unchecked.parents[1]) if unchecked else None,
-            "seed": seed_number(unchecked.parents[1]) if unchecked else None,
-            "checkpoint": str(unchecked) if unchecked else None}
+def target_status(target_path, preferred_seed=None, allow_unhealthy=False):
+    """Describe the exact selection policy without loading or training a model.
+
+    Health remains independent of eligibility: an unhealthy override can make a
+    collapsed or unverified checkpoint selectable, but never makes it ready.
+    Rejected selections retain the same seed pin when looking up diagnostics.
+    """
+    checkpoint = discover_v2_checkpoint(target_path, preferred_seed, allow_unhealthy)
+    selectable = checkpoint is not None
+    if checkpoint is None:
+        checkpoint = discover_v2_checkpoint(target_path, preferred_seed, allow_unhealthy=True)
+    if checkpoint is None:
+        return {"status": "missing", "score": None, "seed": None,
+                "checkpoint": None, "selectable": False}
+    seed_dir = checkpoint.parents[1]
+    score = seed_score(seed_dir)
+    return {"status": checkpoint_health(seed_dir),
+            "score": score if math.isfinite(score) else None,
+            "seed": seed_number(seed_dir), "checkpoint": str(checkpoint),
+            "selectable": selectable}
+
+
+def _play_config_number(section, key, *, integer=False, minimum=None, maximum=None):
+    """Validate saved scalar settings before constructing a playable model."""
+    value = section.get(key)
+    try:
+        if isinstance(value, bool) or not isinstance(value, (Real, str)):
+            raise ValueError("expected a numeric scalar")
+        number = int(value) if integer else float(value)
+        if integer and not isinstance(value, str) and number != value:
+            raise ValueError("expected an integer")
+        if not integer and not math.isfinite(number):
+            raise ValueError("expected a finite number")
+        if minimum is not None and number < minimum:
+            raise ValueError(f"must be at least {minimum}")
+        if maximum is not None and number > maximum:
+            raise ValueError(f"must be at most {maximum}")
+    except (TypeError, ValueError, OverflowError) as exc:
+        expected = "an integer" if integer else "a finite number"
+        if minimum is not None:
+            expected += f" at least {minimum}"
+        if maximum is not None:
+            expected += f" and at most {maximum}"
+        # Conversion errors may include the entire malformed saved value.
+        # Keep picker notices bounded; retain that detail in the chained cause.
+        raise ValueError(f"invalid play checkpoint config {key}: expected {expected}") from exc
+    return number
+
+
+def _play_model_state(state_dict, channels, hidden_size):
+    """Check architecture metadata against weights before allocating an NCA."""
+    try:
+        state_dict = normalize_state_dict(state_dict)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid play checkpoint model state") from exc
+    shapes = {
+        "perception_filters": (channels * 3, 1, 3, 3),
+        "fc0.weight": (hidden_size, channels * 3, 1, 1),
+        "fc0.bias": (hidden_size,),
+        "fc1.weight": (channels, hidden_size, 1, 1),
+        "fc1.bias": (channels,),
+    }
+    if state_dict.keys() != shapes.keys():
+        raise ValueError("play checkpoint parameters do not match the NCA architecture")
+    for name, shape in shapes.items():
+        value = state_dict[name]
+        if not isinstance(value, torch.Tensor) or tuple(value.shape) != shape:
+            raise ValueError(f"play checkpoint parameter {name} does not match model config")
+    return state_dict
 
 
 def load_v2_model(checkpoint_path, device):
     checkpoint_path = Path(checkpoint_path)
     blob = load_checkpoint_file(checkpoint_path, device)
     config = checkpoint_config(blob, checkpoint_path=checkpoint_path)
-    if "model" not in config or "data" not in config:
-        raise ValueError(f"missing model/data config for {checkpoint_path}")
+    for section in ("model", "data", "train"):
+        if not isinstance(config.get(section, {} if section == "train" else None), Mapping):
+            raise ValueError(f"missing or invalid {section} config for {checkpoint_path}")
 
     model_cfg = config["model"]
+    channels = _play_config_number(model_cfg, "channels", integer=True, minimum=5)
+    hidden_size = _play_config_number(model_cfg, "hidden_size", integer=True, minimum=1)
+    fire_rate = _play_config_number(model_cfg, "fire_rate", minimum=0, maximum=1)
+    # Match the arena's minimum supported grid, including its seed margins.
+    tensor_limit = torch.iinfo(torch.int64).max
+    grid_size = _play_config_number(config["data"], "grid_size", integer=True,
+                                    minimum=8, maximum=tensor_limit)
+    state_dict = _play_model_state(blob["model"], channels, hidden_size)
+    # These are representation limits, not a promise that available memory can
+    # hold a large valid arena. Account for int64 ownership and the largest NCA
+    # feature map; let actual allocation/device failures propagate as before.
+    float_bytes = torch.finfo(torch.get_default_dtype()).bits // 8
+    bytes_per_cell = max(8, float_bytes * max(channels * 3, hidden_size))
+    if grid_size * grid_size > tensor_limit // bytes_per_cell:
+        raise ValueError("invalid play checkpoint config grid_size: tensor storage exceeds the signed 64-bit limit")
     channels_last = bool(config.get("train", {}).get("channels_last", False))
     model = NCA(
-        channels=int(model_cfg["channels"]),
-        hidden_size=int(model_cfg["hidden_size"]),
-        fire_rate=float(model_cfg["fire_rate"]),
+        channels=channels,
+        hidden_size=hidden_size,
+        fire_rate=fire_rate,
     ).to(device)
 
     if channels_last and device == "cuda":
         model = model.to(memory_format=torch.channels_last)
 
-    load_model_state(model, blob["model"])
+    load_model_state(model, state_dict)
     model.eval()
-    score = float(blob.get("score", seed_score(checkpoint_path.parents[1])))
+    try:
+        score = float(blob.get("score", seed_score(checkpoint_path.parents[1])))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"invalid checkpoint score: {checkpoint_path}") from exc
 
     return {
         "model": model,
-        "channels": int(model_cfg["channels"]),
-        "grid_size": int(config["data"]["grid_size"]),
+        "channels": channels,
+        "grid_size": grid_size,
         "channels_last": channels_last,
         "kind": "v2",
         "source": str(checkpoint_path),
@@ -143,12 +229,24 @@ def ensure_model(target_path, device, bootstrap_steps=0, preferred_seed=None, al
             pool_size=1024 if device == "cuda" else 256, no_compile=True, no_amp=device != "cuda",
         )
     if checkpoint is None:
-        status = target_status(target_path)["status"]
+        status = target_status(target_path, preferred_seed, allow_unhealthy)["status"]
         seed_text = f" seed {preferred_seed}" if preferred_seed is not None else ""
+        if preferred_seed is None:
+            guidance = (
+                "Choose a ready organism with --list-models, train it explicitly, "
+                "or use --allow-unhealthy to inspect failed/unverified weights."
+            )
+        else:
+            guidance = (
+                "Change or remove the checkpoint seed pin, or choose a culture "
+                f"with a usable checkpoint at seed {preferred_seed}. "
+                "--list-models shows automatic choices without seed pins. "
+                "Train this seed explicitly, or use --allow-unhealthy to inspect "
+                "existing failed/unverified weights."
+            )
         raise ValueError(
             f"No usable checkpoint for {Path(target_path).stem}{seed_text} ({status}). "
-            "Choose a ready organism with --list-models, train it explicitly, "
-            "or use --allow-unhealthy to inspect failed/unverified weights."
+            f"{guidance}"
         )
     bundle = load_v2_model(checkpoint, device)
     bundle["health"] = checkpoint_health(checkpoint.parents[1])
@@ -230,6 +328,7 @@ def reset_world(size, device, left_bundle, right_bundle, left_pos=None, right_po
 
 
 def render_surface(state_a, state_b, owner, team_colors=False):
+    import pygame
     rgba = compose_rgba(state_a, state_b, owner)[0].detach().cpu().clamp(0.0, 1.0)
     if team_colors:
         alpha = rgba[3:4]

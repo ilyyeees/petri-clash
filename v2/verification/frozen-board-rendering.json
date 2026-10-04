@@ -1,0 +1,859 @@
+{
+  "schema": "petri-clash-frozen-board-rendering",
+  "schema_version": 1,
+  "runtime": {
+    "device": "cpu",
+    "seed": 42,
+    "cpu_threads": 1,
+    "interop_threads": 9,
+    "logical_cpu_count": 9,
+    "deterministic_algorithms": true,
+    "python_version": "3.12.14",
+    "torch_version": "2.14.1+cpu",
+    "numpy_version": "2.3.5",
+    "platform": "Linux",
+    "machine": "x86_64",
+    "pygame_version": "2.6.1"
+  },
+  "models": [
+    {
+      "culture": "01_heart",
+      "checkpoint_seed": "seed_000",
+      "channels": 24
+    },
+    {
+      "culture": "02_star",
+      "checkpoint_seed": "seed_001",
+      "channels": 24
+    }
+  ],
+  "configuration": {
+    "grid_size": 48,
+    "initial_growth_ticks": 160,
+    "seed": 42,
+    "frames_per_trial": 120,
+    "warmup_frames": 20,
+    "repeats": 3,
+    "torch_threads": 1
+  },
+  "scope": "Same-frame rotating baseline, unchanged control and current paused-only cache. Warm, settled paused redraws, not first-pause/edit/easing-miss cost. One untimed advance of presentation easing per frame. Live scenes step once before drawing. Only draw() is timed; loading, simulation, warmup, identity checks and native display/pacing are excluded.",
+  "every_frame_pixels_state_rng_hitboxes_equal": true,
+  "limits": [
+    "SDL dummy raster measurements, not native-display FPS",
+    "Competing host processes are not controlled",
+    "Cache memory is surface pitch plus RGB bytes, not process RSS",
+    "No training or checkpoint writes"
+  ],
+  "summary": [
+    {
+      "width": 860,
+      "mode": "paused",
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.6178535,
+          "p95_ms": 3.3827576000000006,
+          "samples": 360
+        },
+        "control": {
+          "p50_ms": 2.594213,
+          "p95_ms": 3.2179440500000007,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 2.3655485,
+          "p95_ms": 3.0799475000000003,
+          "samples": 360
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.027315999999999896,
+          "p95_ms": 0.5042002000000004,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": -0.23687700000000023,
+          "p95_ms": 0.4573160500000007,
+          "samples": 360
+        }
+      },
+      "retained_raster_bytes_peak": 1080208
+    },
+    {
+      "width": 860,
+      "mode": "live",
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.579666,
+          "p95_ms": 3.01067695,
+          "samples": 360
+        },
+        "control": {
+          "p50_ms": 2.593697,
+          "p95_ms": 3.0516720000000004,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 2.596005,
+          "p95_ms": 3.0511500500000004,
+          "samples": 360
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.002899500000000055,
+          "p95_ms": 0.45220169999999965,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 0.005568500000000087,
+          "p95_ms": 0.4193786500000003,
+          "samples": 360
+        }
+      },
+      "retained_raster_bytes_peak": 0
+    },
+    {
+      "width": 1100,
+      "mode": "paused",
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.06702,
+          "p95_ms": 3.5058334,
+          "samples": 360
+        },
+        "control": {
+          "p50_ms": 3.0681770000000004,
+          "p95_ms": 3.5273125,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 2.579746,
+          "p95_ms": 3.05685925,
+          "samples": 360
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.0009869999999998491,
+          "p95_ms": 0.3585276000000004,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": -0.4919104999999999,
+          "p95_ms": -0.0633302499999998,
+          "samples": 360
+        }
+      },
+      "retained_raster_bytes_peak": 2197312
+    },
+    {
+      "width": 1100,
+      "mode": "live",
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.1302405,
+          "p95_ms": 3.7098105500000003,
+          "samples": 360
+        },
+        "control": {
+          "p50_ms": 3.1411975,
+          "p95_ms": 3.7768432,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 3.128352,
+          "p95_ms": 3.7382547500000003,
+          "samples": 360
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.01904899999999987,
+          "p95_ms": 0.5229806,
+          "samples": 360
+        },
+        "cached": {
+          "p50_ms": 0.013214999999999977,
+          "p95_ms": 0.5622500500000003,
+          "samples": 360
+        }
+      },
+      "retained_raster_bytes_peak": 0
+    }
+  ],
+  "runs": [
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "paused",
+      "repeat": 1,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.561508,
+          "p95_ms": 3.6233195499999993,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.52646,
+          "p95_ms": 3.1313115499999995,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.3241855,
+          "p95_ms": 3.2444002499999995,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.030135500000000093,
+          "p95_ms": 0.32901949999999974,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.23091300000000015,
+          "p95_ms": 0.36733964999999935,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 1080208,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "live",
+      "repeat": 1,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.569641,
+          "p95_ms": 3.0255940999999997,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.5715185,
+          "p95_ms": 3.1091444,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.58924,
+          "p95_ms": 2.98307005,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.006564500000000084,
+          "p95_ms": 0.4581866999999993,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.01961899999999983,
+          "p95_ms": 0.4155064499999999,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "paused",
+      "repeat": 1,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.115743,
+          "p95_ms": 4.05163355,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.1077965,
+          "p95_ms": 3.7112684999999987,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.611704,
+          "p95_ms": 3.4686114499999987,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.010585999999999762,
+          "p95_ms": 0.56447205,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.5025765,
+          "p95_ms": 0.1405052499999997,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 2197312,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "live",
+      "repeat": 1,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.2135355,
+          "p95_ms": 3.8278111499999996,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.20996,
+          "p95_ms": 3.9909619,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 3.2163795,
+          "p95_ms": 3.8958904,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.02635999999999994,
+          "p95_ms": 0.5307452499999998,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 0.0009215000000000195,
+          "p95_ms": 0.6134270999999998,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "live",
+      "repeat": 2,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.1237399999999997,
+          "p95_ms": 3.5051614499999997,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.121642,
+          "p95_ms": 3.76883,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 3.107441,
+          "p95_ms": 3.6971349,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.0013525000000000897,
+          "p95_ms": 0.49065429999999993,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 0.018458000000000085,
+          "p95_ms": 0.4618054499999998,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "paused",
+      "repeat": 2,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.01749,
+          "p95_ms": 3.3576719,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.0335845,
+          "p95_ms": 3.4079239,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.550191,
+          "p95_ms": 3.00692745,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.007611500000000104,
+          "p95_ms": 0.2724983999999997,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.48875100000000016,
+          "p95_ms": -0.1687140500000001,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 2197312,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "live",
+      "repeat": 2,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.5593005,
+          "p95_ms": 2.89927245,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.56586,
+          "p95_ms": 2.94784375,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.571839,
+          "p95_ms": 2.9556774999999997,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.0029489999999998684,
+          "p95_ms": 0.3775375499999999,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 0.02373550000000013,
+          "p95_ms": 0.33217694999999997,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "paused",
+      "repeat": 2,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.6738530000000003,
+          "p95_ms": 3.42808525,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.673502,
+          "p95_ms": 3.3653814999999994,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.4654335,
+          "p95_ms": 2.97678735,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.04405649999999994,
+          "p95_ms": 0.7084244500000001,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.23658600000000019,
+          "p95_ms": 0.39510475,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 1080208,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "paused",
+      "repeat": 3,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.6028105000000004,
+          "p95_ms": 3.03822635,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.5668115,
+          "p95_ms": 2.95994625,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.3217365,
+          "p95_ms": 3.1503780499999996,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.008248000000000033,
+          "p95_ms": 0.4522311000000001,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.2427149999999998,
+          "p95_ms": 0.5461797,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 1080208,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 860,
+      "window": [
+        860,
+        740
+      ],
+      "board": [
+        518,
+        518
+      ],
+      "mode": "live",
+      "repeat": 3,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 2.6219345,
+          "p95_ms": 3.0712823499999997,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 2.6388145,
+          "p95_ms": 3.0803855,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.6434569999999997,
+          "p95_ms": 3.27626655,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.008107499999999934,
+          "p95_ms": 0.49667575000000014,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 0.016714999999999813,
+          "p95_ms": 0.6769081499999997,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "paused",
+      "repeat": 3,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.095494,
+          "p95_ms": 3.4098319,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.0713375000000003,
+          "p95_ms": 3.39326915,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 2.564679,
+          "p95_ms": 2.90881005,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": -0.0019225000000000492,
+          "p95_ms": 0.33525610000000017,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": -0.4959825,
+          "p95_ms": -0.20729545000000002,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 2197312,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    },
+    {
+      "width": 1100,
+      "window": [
+        1100,
+        902
+      ],
+      "board": [
+        740,
+        740
+      ],
+      "mode": "live",
+      "repeat": 3,
+      "models": [
+        {
+          "culture": "01_heart",
+          "checkpoint_seed": "seed_000",
+          "channels": 24
+        },
+        {
+          "culture": "02_star",
+          "checkpoint_seed": "seed_001",
+          "channels": 24
+        }
+      ],
+      "draw": {
+        "baseline": {
+          "p50_ms": 3.0795735,
+          "p95_ms": 3.5525153499999997,
+          "samples": 120
+        },
+        "control": {
+          "p50_ms": 3.1130639999999996,
+          "p95_ms": 3.5863536999999996,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 3.0911964999999997,
+          "p95_ms": 3.6913416,
+          "samples": 120
+        }
+      },
+      "paired_delta": {
+        "control": {
+          "p50_ms": 0.02894349999999979,
+          "p95_ms": 0.4513980000000001,
+          "samples": 120
+        },
+        "cached": {
+          "p50_ms": 0.012288500000000147,
+          "p95_ms": 0.5169542000000001,
+          "samples": 120
+        }
+      },
+      "retained_raster_bytes_peak": 0,
+      "every_frame_pixels_state_rng_hitboxes_equal": true
+    }
+  ]
+}
