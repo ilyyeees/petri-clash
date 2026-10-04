@@ -87,3 +87,60 @@ A second full six-round run reproduced every raw duel result and the complete
 summary exactly. Only timing fields differ. The final focused suite passed
 24 tests plus 41 subtests with shipped-checkpoint opt-in, and compile checks
 passed. No GPU run or training was performed.
+
+## Ready-culture default-round check
+
+A broader bounded check on 2026-10-04 used all five ready cultures and every
+unique pairing. Each pairing ran seeds **0, 7 and 42** in both assignments:
+**10 matchups, 30 paired seeds and 60 complete rounds**. Settings were 48×48,
+default hard rules, mirrored starts, 600 total ticks with 60 unscored warmup
+ticks, and one intra-op CPU thread. The checkpoint seeds were heart 000, star 001,
+sun 002, flower 002 and umbrella 000.
+
+All rounds finished valid and finite at their exact endpoint. Both cultures had
+living cells at the end of every round; this endpoint observation does not claim
+that every intermediate tick was inspected for population loss.
+
+The table sums each culture's cell-ticks over all six rounds in its pairing.
+The gap is `abs(A − B) / (A + B)`, not a win probability or a confidence measure.
+
+| A / B | A cell-ticks | B cell-ticks | Combined-score gap | Paired result in each sampled seed |
+|---|---:|---:|---:|---|
+| Heart / Star | 774,705 | 553,535 | 16.65% | Heart |
+| Heart / Sun | 788,848 | 400,589 | 32.64% | Heart |
+| Heart / Flower | 725,456 | 745,601 | 1.37% | Flower |
+| Heart / Umbrella | 742,343 | 489,691 | 20.51% | Heart |
+| Star / Sun | 600,609 | 409,354 | 18.94% | Star |
+| Star / Flower | 556,848 | 799,035 | 17.86% | Flower |
+| Star / Umbrella | 576,571 | 538,863 | 3.38% | Star |
+| Sun / Flower | 400,740 | 820,748 | 34.38% | Flower |
+| Sun / Umbrella | 409,909 | 552,954 | 14.86% | Umbrella |
+| Flower / Umbrella | 795,813 | 508,751 | 22.00% | Flower |
+
+Heart/flower and star/umbrella were the closest observed pairings in this slate.
+Heart/flower's seed-7 single-round winning culture changed after swapping sides;
+its combined pair still favored flower. Its six-round totals exactly reproduced
+the earlier comparison in this report. No other sampled pairing changed its
+single-round winner after a side swap.
+
+This supports optional matchup guidance, not a universal ranking or a balance
+claim. Different seeds, durations, placements, grids, rules, checkpoints or
+software can change the outcome. These are differently sized shape-growing
+cultures, and readiness does not mean equal competitive strength. No rules,
+weights or default culture choices were changed from this small sample.
+
+[Curated scores, per-seed pairs and final living-cell counts](ready-matchups.json)
+retain the portable configuration and runtime metadata, without checkpoint paths
+or fingerprints. Each score row can be reproduced with the existing comparison
+command, substituting its culture indices (heart 1, star 2, sun 3, flower 6,
+umbrella 7):
+
+```bash
+python v2/compare.py --left 1 --right 6 --seeds 0,7,42 --mode hard \
+  --grid-size 48 --round-ticks 600 --warmup-ticks 60 --cpu-threads 1
+python v2/compare.py --left 2 --right 7 --seeds 0,7,42 --mode hard \
+  --grid-size 48 --round-ticks 600 --warmup-ticks 60 --cpu-threads 1
+```
+
+Final living-cell counts were read from each completed Arena without advancing
+it. They are supplementary endpoint diagnostics, not additional scoring rules.

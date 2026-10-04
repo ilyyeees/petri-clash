@@ -20,7 +20,7 @@ python v2/clash.py --device cpu
 
 Alternatively, the existing `v2/environment.yml` conda environment remains available. `--device auto` selects MPS on Apple silicon when available. GPU paths are retained but this upgrade was verified on CPU only.
 
-Start with heart versus star. By default, the visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. Sun is usable but noticeably weaker than the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
+Start with heart versus star. By default, the visual picker shows all nine targets and their exported evaluation status, and selects the best usable seed. Moon, bolt, yin, and skull have collapsed weights in the repository; they are visibly marked and rejected by default. In the [sampled default hard-mode duels](verification/compare.md#ready-culture-default-round-check), sun scored below the other ready cultures. A `ready` label reflects saved evaluation metadata, not a new quality guarantee.
 
 ```bash
 python v2/clash.py --list-models
@@ -108,6 +108,12 @@ python v2/clash.py --device cpu --duel --round-ticks 300 --warmup-ticks 30 \
 The sandbox remains the default. Custom rounds require `0 <= warmup-ticks < round-ticks`. Headless requests shorter than the round produce an in-progress score; larger requests stop at the round's exact endpoint. The report includes phase, scored ticks, integer totals, averages, winner, and placement type.
 
 See the [duel verification report](verification/duels.md) for screenshots, regression coverage, and measured CPU cost.
+
+For a closer observed matchup, try **heart / flower** (`--left 1 --right 6`) or
+**star / umbrella** (`--left 2 --right 7`). They had the smallest paired score gaps
+in a three-seed, both-sides [ready-culture check](verification/compare.md#ready-culture-default-round-check).
+This is a small default-hard-mode sample, not a guarantee of balance. Heart/star
+remains the default.
 
 This addition applies the explicit-objective and readable-outcome direction of [Subset's Into the Breach](https://www.subsetgames.com/itb.html), with a one-action start/rematch following the [Game Accessibility Guidelines' quick-start recommendation](https://gameaccessibilityguidelines.com/allow-the-game-to-be-started-without-the-need-to-navigate-through-multiple-levels-of-menus/). The cellular simulation remains Petri Clash's own; it does not imitate turn-based combat or promise perfect information.
 
