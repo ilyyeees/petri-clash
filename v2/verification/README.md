@@ -2,6 +2,7 @@
 
 Verification for the cumulative v2 improvements:
 
+- [Portable duel recipes](duel-recipes.md): saving completed rounds, bounded CPU reruns, and explicit score checks
 - [CPU inference efficiency](inference-efficiency.md): bounded activation reuse, exact replay checks, and paired latency measurements
 - [Guided regrowth lesson](lesson.md): interactive flow, recovery measurements, and visual checks
 - [Paired seeded comparisons](compare.md): both side assignments, exact score mapping, and repeatability

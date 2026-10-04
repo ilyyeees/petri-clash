@@ -358,7 +358,7 @@ class DuelUIIntegrationTests(unittest.TestCase):
         self.assertTrue(self.ui.result_visible)
         self.ui.draw(dt=.25)
         self.assertIsNotNone(self.ui.result_rect)
-        self.assertEqual(len(self.ui.result_buttons), 4)
+        self.assertEqual(len(self.ui.result_buttons), 5)
         self.assert_tensors_equal(tensors)
         self.assertEqual(self.world.duel.snapshot(), result)
         self.assertEqual(self.ui.duel_snapshot, result)
@@ -548,7 +548,7 @@ class DuelUIIntegrationTests(unittest.TestCase):
                 self.assertTrue(window.contains(self.ui.result_rect))
                 self.assertTrue(self.ui.board.contains(self.ui.result_rect))
                 self.assertEqual([action for _, action in self.ui.result_buttons],
-                                 ["result", "reset", "next_seed", "duel"])
+                                 ["result", "save_duel", "reset", "next_seed", "duel"])
                 for index, (rect, _) in enumerate(self.ui.result_buttons):
                     self.assertTrue(self.ui.result_rect.contains(rect))
                     self.assertTrue(window.contains(rect))

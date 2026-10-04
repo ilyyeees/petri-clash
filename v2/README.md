@@ -84,6 +84,24 @@ See the [duel verification report](verification/duels.md) for screenshots, regre
 
 This addition applies the explicit-objective and readable-outcome direction of [Subset's Into the Breach](https://www.subsetgames.com/itb.html), with a one-action start/rematch following the [Game Accessibility Guidelines' quick-start recommendation](https://gameaccessibilityguidelines.com/allow-the-game-to-be-started-without-the-need-to-navigate-through-multiple-levels-of-menus/). The cellular simulation remains Petri Clash's own; it does not imitate turn-based combat or promise perfect information.
 
+## Save and rerun a duel
+
+After a valid CPU duel finishes, press **S / SAVE DUEL** to keep its portable recipe before moving to the next round. Files go in `./duels/` by default; `--duel-save-dir DIR` chooses another folder. Repeated saves of the same result reuse its existing file, and new rounds get separate files without overwriting earlier saves. Saving does not advance the simulation or consume its RNG. The shortcut also works while the result panel is hidden.
+
+For a scripted run, `--export-duel FILE` writes a recipe for the final completed round on exit. It uses the cultures, checkpoint seeds, rules and positions actually played, including changes made in the interface:
+
+```bash
+python v2/clash.py --device cpu --duel --seed 42 --headless-frames 600 \
+  --export-duel saved-duel.json
+python v2/replay.py saved-duel.json --report replay-check.json --snapshot replay-board.png
+```
+
+The replay command reruns the full round headlessly on CPU and reports **Saved scores matched** or **Saved scores differed**, with both exact integer totals. It accepts output controls, not new model/rule settings. Missing or unhealthy exact checkpoint selections are rejected without substituting weights or training. Exit status is 0 for matching scores, 1 for different scores or an invalid simulation, and 2 for input/loading/output errors.
+
+Recipes contain portable culture identifiers, checkpoint seed numbers, simulation settings, runtime versions and expected scores. They exclude local checkpoint paths, weights, tensors and RNG states. Ordinary `--report` files remain diagnostic reports and are not recipe files. Export requires a valid, finished, finite CPU duel using ready checkpoints; it rejects partial rounds, lessons and the sandbox. The bounded format supports grids from 8 through 128, at most 10,000 total ticks, and 1–64 CPU threads.
+
+Runtime differences produce a warning before the score check. Matching scores alone do not verify identical tensor history, model identity or provenance; changed weights under the same culture/seed cannot be detected from the recipe. See the [recipe format and verification](verification/duel-recipes.md) for validation rules and reproducibility limits. Explicit export/report destinations replace their files; recipe replacement is atomic. Output files must be distinct, and replay outputs cannot overwrite the input recipe.
+
 ## Compare both sides
 
 One round can depend on which side a culture starts on. The compact comparison command plays each seed twice, swaps the cultures, and adds each culture's exact cell-tick scores across both legs:
@@ -114,6 +132,7 @@ Soft mode keeps both organisms independent. Switch modes with **M** or the mode 
 | Apply the lesson's current action | Enter or the highlighted lesson button |
 | Rematch a completed duel | Enter, R or REMATCH |
 | Play a completed duel with the next seed | NEXT SEED |
+| Save a completed CPU duel recipe | S or SAVE DUEL |
 | Cycle 1× / 2× / 4× / 8× speed | Tab or speed button |
 | Toggle hard / soft rules and reset | M or mode button |
 | Team colors | T or COLORS |

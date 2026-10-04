@@ -1,0 +1,52 @@
+{
+  "scenario": "live flower/umbrella selection from heart/star hard launch",
+  "launch_selections_stale": true,
+  "configuration": {
+    "mode": "soft",
+    "simulation_seed": 51,
+    "grid_size": 40,
+    "starting_positions": {
+      "left": [
+        2,
+        37
+      ],
+      "right": [
+        37,
+        2
+      ]
+    },
+    "placement": "custom",
+    "round_ticks": 80,
+    "warmup_ticks": 10,
+    "rules": {
+      "pressure_gain": 0.3,
+      "control_decay": 0.94,
+      "capture_threshold": 0.6,
+      "release_threshold": 0.08,
+      "tie_margin": 0.02
+    }
+  },
+  "models": {
+    "left": {
+      "target": "06_flower",
+      "checkpoint_seed": 2
+    },
+    "right": {
+      "target": "07_umbrella",
+      "checkpoint_seed": 0
+    }
+  },
+  "expected_score": {
+    "left_cell_ticks": 3936,
+    "right_cell_ticks": 5254
+  },
+  "observed_score": {
+    "left_cell_ticks": 3936,
+    "right_cell_ticks": 5254
+  },
+  "status": "matched",
+  "final_state_bits_and_layout_equal": true,
+  "all_rng_equal": true,
+  "one_cell_tick_change_status": "different",
+  "runtime_warning_with_matching_score": true
+}

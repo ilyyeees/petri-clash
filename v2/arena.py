@@ -3,6 +3,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import sys
 import time
 
 import numpy as np
@@ -12,7 +13,7 @@ import torch
 from battle import clash_step, compose_rgba, crater
 from clash import (V2_ROOT, active_grid_size, clamp, ensure_model, list_targets,
                    parse_grid_pos, reset_world, target_status)
-from runtime import configure_runtime
+from runtime import configure_runtime, runtime_info
 from trainer.common import pick_device
 from duel import DuelConfig, DuelRound
 
@@ -321,6 +322,20 @@ class Arena:
                 "rules": {k: getattr(self.args, k) for k in ("pressure_gain", "control_decay",
                     "capture_threshold", "release_threshold", "tie_margin")}}
 
+    def duel_recipe(self):
+        """Capture the finished live round, never stale launch selections."""
+        from duel_recipe import build_recipe
+
+        states = (self.a, self.b, self.owner, self.control)
+        if any(value.device.type != "cpu" for value in states):
+            raise ValueError("Duel recipes currently support CPU rounds only.")
+        report = self.report(0)
+        report["finite"] = all(bool(torch.isfinite(value).all())
+                               for value in states)
+        runtime = runtime_info()
+        runtime["device"] = self.args.device
+        return build_recipe(report, runtime)
+
 
 def parse_args(argv=None, default_mode="hard"):
     parser = argparse.ArgumentParser(description="Petri Clash: a living neural arena. No training required.")
@@ -356,8 +371,22 @@ def parse_args(argv=None, default_mode="hard"):
     parser.add_argument("--list-models", action="store_true")
     parser.add_argument("--report", type=Path, help="write final machine-readable match report")
     parser.add_argument("--snapshot", type=Path, help="save final PNG (board headlessly; entire interactive window)")
+    parser.add_argument("--export-duel", type=Path, help="save a portable recipe for the final completed CPU duel")
+    parser.add_argument("--duel-save-dir", type=Path, default=Path("duels"),
+                        help="folder for SAVE DUEL / S recipes (default: ./duels)")
     parser.add_argument("--ui-frames", type=int, default=0, help="exit interactive mode after N frames, useful for UI smoke tests")
     args = parser.parse_args(argv)
+    outputs = [(name, getattr(args, name)) for name in ("report", "snapshot", "export_duel")
+               if getattr(args, name) is not None]
+    if len(outputs) > 1:
+        from duel_recipe import paths_alias
+        try:
+            for i, (name, path) in enumerate(outputs):
+                for other_name, other_path in outputs[i + 1:]:
+                    if paths_alias(path, other_path):
+                        parser.error(f"--{name.replace('_', '-')} and --{other_name.replace('_', '-')} need different output files")
+        except (OSError, RuntimeError):
+            parser.error("could not resolve output locations; choose accessible, distinct files")
     if args.lesson and (args.duel or args.headless_frames):
         parser.error("--lesson is interactive and cannot be combined with --duel or --headless-frames")
     try:
@@ -422,6 +451,8 @@ class ArenaUI:
         self.result_rect = None
         self.stale_result_rect = None
         self.result_visible = True
+        self.saved_duel = None
+        self.saved_duel_path = None
         self.board = pygame.Rect(0, 0, 1, 1)
         self.clock = pygame.time.Clock()
         self.stats_cache = arena.stats()
@@ -500,6 +531,24 @@ class ArenaUI:
         self.lesson_notice_phase = self.arena.lesson.phase if self.arena.lesson else None
         self.notices.append((text, color, self.elapsed))
         self.notices = self.notices[-3:]
+
+    def save_duel(self):
+        """Save once per finished round without advancing or changing it."""
+        from duel_recipe import save_unique_recipe
+
+        try:
+            if (self.saved_duel is self.arena.duel and self.saved_duel_path is not None
+                    and self.saved_duel_path.is_file()):
+                self.notice(f"Already saved: {self.saved_duel_path.name}", AMBER)
+                return
+            recipe = self.arena.duel_recipe()
+            path = save_unique_recipe(self.arena.args.duel_save_dir, recipe)
+        except (ValueError, OSError, RuntimeError) as exc:
+            self.notice(f"Could not save duel: {exc}", CORAL)
+            return
+        self.saved_duel, self.saved_duel_path = self.arena.duel, path
+        self.notice(f"Saved duel: {path.name}", AMBER)
+        print(f"Saved duel recipe: {path}", file=sys.stderr)
 
     def interact(self, x, y, side=None):
         """Apply one input, then report its real immediate effect, even paused."""
@@ -798,6 +847,10 @@ class ArenaUI:
         button_width = (width - 60) // 3
         start = len(self.buttons)
         self.button((rect.right - 72, rect.y + 13, 56, 23), "HIDE", "result")
+        if duel["valid"]:
+            saved = self.saved_duel is self.arena.duel and self.saved_duel_path is not None
+            self.button((rect.right - 184, rect.y + 13, 104, 23),
+                        "SAVED / S" if saved else "SAVE DUEL / S", "save_duel", saved)
         for i, (label, action) in enumerate((("REMATCH / R", "reset"), ("NEXT SEED", "next_seed"), ("BACK TO LAB", "duel"))):
             self.button((x + i * (button_width + 8), rect.bottom - 43, button_width, 28), label, action,
                         active=i == 0)
@@ -1095,6 +1148,9 @@ class ArenaUI:
                 self.result_visible = not self.result_visible
                 if not self.result_visible and self.result_rect:
                     self.stale_result_rect = self.result_rect.copy()
+        elif action == "save_duel":
+            self.save_duel()
+            return
         elif action == "step":
             if arena.lesson and arena.lesson.phase == "injured":
                 if self.lesson_gate_pending:
@@ -1156,7 +1212,7 @@ class ArenaUI:
         if event.type == pg.KEYDOWN:
             mapping = {pg.K_SPACE: "pause", pg.K_r: "reset", pg.K_n: "step", pg.K_c: "clear",
                        pg.K_t: "colors", pg.K_m: "mode", pg.K_TAB: "speed", pg.K_f: "motion",
-                       pg.K_d: "duel", pg.K_g: "lesson"}
+                       pg.K_d: "duel", pg.K_g: "lesson", pg.K_s: "save_duel"}
             if event.key == pg.K_RETURN:
                 if arena.lesson:
                     self.action("lesson_primary")
@@ -1262,6 +1318,13 @@ def main(argv=None, default_mode="hard"):
         raise SystemExit(report["lesson"]["reason"])
     if not report["finite"]:
         raise SystemExit("Simulation produced non-finite state; check the selected checkpoints.")
+    if args.export_duel:
+        from duel_recipe import write_recipe
+        try:
+            write_recipe(args.export_duel, arena.duel_recipe())
+        except (ValueError, OSError, RuntimeError) as exc:
+            raise SystemExit(f"Could not export duel: {exc}") from exc
+        print(f"Saved duel recipe: {args.export_duel}", file=sys.stderr)
 
 
 if __name__ == "__main__":
